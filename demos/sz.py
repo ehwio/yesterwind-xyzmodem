@@ -246,7 +246,7 @@ async def serve(
     def _client_factory(
         reader: asyncio.StreamReader, writer: asyncio.StreamWriter
     ) -> None:
-        task = asyncio.get_event_loop().create_task(
+        task = asyncio.get_running_loop().create_task(
             _handle_client(reader, writer, files)
         )
         pending.add(task)
@@ -273,10 +273,12 @@ async def serve(
             if serve_forever:
                 await server.serve_forever()
             else:
-                # Wait for the one connection to finish
+                # Wait for the one connection to finish: first wait for the
+                # server to stop accepting (client_factory closes it on
+                # connect), then await the in-flight task directly.
                 await server.start_serving()
-                while server.is_serving() or pending:
-                    await asyncio.sleep(0.1)
+                while server.is_serving():
+                    await asyncio.sleep(0.05)
                 if pending:
                     await asyncio.gather(*pending, return_exceptions=True)
         except asyncio.CancelledError:
