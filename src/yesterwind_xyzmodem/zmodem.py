@@ -441,9 +441,8 @@ class ZModem:
                             f0, f1, f2, f3 = _encode_offset(bytes_written)
                             await self._transport.write(_build_hex_header(ZACK, f0, f1, f2, f3))
                             # Sender continues sending subpackets; stay in inner loop
-                    continue
 
-                if ftype in (ZABORT, ZCAN):
+                elif ftype in (ZABORT, ZCAN):
                     raise TransferCancelled("Remote cancelled during data transfer")
 
         return bytes_written
