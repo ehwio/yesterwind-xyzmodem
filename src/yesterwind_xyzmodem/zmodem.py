@@ -132,7 +132,7 @@ def _build_bin32_header(frame_type: int, f0: int, f1: int, f2: int, f3: int) -> 
     encoded = _zdle_encode(
         payload + bytes([c & 0xFF, (c >> 8) & 0xFF, (c >> 16) & 0xFF, (c >> 24) & 0xFF])
     )
-    return bytes([0x2a, ZDLE, ZBIN32]) + encoded
+    return bytes([0x2A, ZDLE, ZBIN32]) + encoded
 
 
 def _encode_offset(offset: int) -> tuple[int, int, int, int]:
