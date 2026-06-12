@@ -1,0 +1,18 @@
+[project]
+name = "yesterwind-demos"
+version = "0.1.0"
+description = "Demo programs for the yesterwind-xyzmodem package"
+requires-python = ">=3.10"
+dependencies = [
+    "rich>=13.7",
+]
+
+[tool.uv.sources]
+# yesterwind-xyzmodem is resolved via sys.path in each script;
+# add it here so `uv sync` installs it in editable mode if desired.
+yesterwind-xyzmodem = { path = "..", editable = true }
+
+[tool.uv]
+dev-dependencies = [
+    "yesterwind-xyzmodem",
+]
