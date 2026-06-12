@@ -35,6 +35,10 @@ class PipedTransport:
 
     ``side_a`` and ``side_b`` are independent Transport objects: data
     written to A arrives at B's read, and vice versa.
+
+    Must be constructed inside a running event loop (i.e. inside an async
+    test or an async fixture) so that the queues bind to the correct loop
+    on Python 3.9.
     """
 
     def __init__(self) -> None:
@@ -76,7 +80,7 @@ class _QueueTransport:
 
 
 @pytest.fixture
-def piped():
+async def piped():
     """Return a PipedTransport with two connected sides."""
     return PipedTransport()
 
