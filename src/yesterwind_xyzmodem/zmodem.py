@@ -110,16 +110,21 @@ def _zdle_encode(data: bytes) -> bytes:
 
 
 def _build_hex_header(frame_type: int, f0: int, f1: int, f2: int, f3: int) -> bytes:
-    """Build a ZHEX header frame.  f0 is ZF0 (LSB), f3 is ZF3 (MSB)."""
+    """Build a ZHEX header frame.
+
+    Wire order: TYPE f0 f1 f2 f3.  For position frames f0 is the LSB
+    (ZP0 convention).  For ZRINIT flags, caps go in f3 (ZF0 = index 3).
+    """
     payload = bytes([frame_type, f0, f1, f2, f3])
     c = crc16(payload)
-    hex_payload = payload.hex().upper().encode("ascii")
-    hex_crc = f"{c:04X}".encode("ascii")
+    # lrzsz's zgethex() only accepts lowercase hex digits.
+    hex_payload = payload.hex().encode("ascii")
+    hex_crc = f"{c:04x}".encode("ascii")
     return b"**\x18B" + hex_payload + hex_crc + b"\r\n"
 
 
 def _build_bin32_header(frame_type: int, f0: int, f1: int, f2: int, f3: int) -> bytes:
-    """Build a ZBIN32 header frame.  f0 is ZF0 (LSB), f3 is ZF3 (MSB)."""
+    """Build a ZBIN32 header frame.  Same wire order as _build_hex_header."""
     payload = bytes([frame_type, f0, f1, f2, f3])
     c = crc32(payload)
     encoded = _zdle_encode(payload + bytes([c & 0xFF, (c >> 8) & 0xFF, (c >> 16) & 0xFF, (c >> 24) & 0xFF]))
@@ -384,8 +389,9 @@ class ZModem:
     # Receiver helpers
 
     async def _send_zrinit(self) -> None:
-        # Flags: CANFDX (full-duplex) | CANOVIO (overlapped I/O) | CANBRK | CANFC32
-        await self._transport.write(_build_hex_header(ZRINIT, 0x23, 0, 0, 0))
+        # Capability flags go in f3 (ZF0 in lrzsz = index 3 on wire).
+        # CANFDX|CANOVIO|CANFC32 = 0x23.
+        await self._transport.write(_build_hex_header(ZRINIT, 0, 0, 0, 0x23))
 
     async def _read_zfile_data(self) -> tuple[str, int, int, int]:
         """Read the ZFILE data subpacket; return (filename, size, mtime, mode)."""
