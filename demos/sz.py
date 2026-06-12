@@ -211,6 +211,19 @@ async def _handle_client(
         for fh in handles:
             fh.close()
         panel.finish(ok, total_sent)
+        # Half-close: stop sending, then drain rz's remaining output before
+        # closing fully so rz doesn't get SIGPIPE on its final write.
+        try:
+            writer.write_eof()
+        except OSError:
+            pass
+        try:
+            while True:
+                chunk = await asyncio.wait_for(reader.read(4096), timeout=1.0)
+                if not chunk:
+                    break
+        except (OSError, asyncio.TimeoutError):
+            pass
         writer.close()
         try:
             await writer.wait_closed()
