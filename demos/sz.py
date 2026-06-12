@@ -34,17 +34,16 @@ import asyncio
 import os
 import pathlib
 import sys
-from typing import Optional
 
 # ── Make sure the local package is importable when run directly ──────────────
 _repo_src = pathlib.Path(__file__).parent.parent / "src"
 if _repo_src.is_dir():
     sys.path.insert(0, str(_repo_src))
 
-from rich.console import Console
-from rich.live import Live
-from rich.panel import Panel
-from rich.progress import (
+from rich.console import Console  # noqa: E402
+from rich.live import Live  # noqa: E402
+from rich.panel import Panel  # noqa: E402
+from rich.progress import (  # noqa: E402
     BarColumn,
     DownloadColumn,
     Progress,
@@ -54,12 +53,12 @@ from rich.progress import (
     TimeElapsedColumn,
     TransferSpeedColumn,
 )
-from rich.table import Table
-from rich.text import Text
+from rich.table import Table  # noqa: E402
+from rich.text import Text  # noqa: E402
 
-from yesterwind_xyzmodem.callbacks import EventType, TransferProgress
-from yesterwind_xyzmodem.transport import StreamTransport
-from yesterwind_xyzmodem.zmodem import ZModem
+from yesterwind_xyzmodem.callbacks import EventType, TransferProgress  # noqa: E402
+from yesterwind_xyzmodem.transport import StreamTransport  # noqa: E402
+from yesterwind_xyzmodem.zmodem import ZModem  # noqa: E402
 
 console = Console(highlight=False)
 
@@ -85,8 +84,8 @@ class _Panel:
             transient=False,
             expand=False,
         )
-        self._task_id: Optional[TaskID] = None
-        self._live: Optional[Live] = None
+        self._task_id: TaskID | None = None
+        self._live: Live | None = None
         self.filename: str = ""
         self.total_bytes: int = 0
         self._file_index: int = 0
@@ -183,7 +182,7 @@ async def _handle_client(
     file_tuples = []
     handles = []
     for path in files:
-        fh = open(path, "rb")
+        fh = open(path, "rb")  # noqa: SIM115
         handles.append(fh)
         file_tuples.append((path.name, fh, os.path.getsize(path)))
 
@@ -259,7 +258,9 @@ async def serve(
     actual_port = addrs[0][1] if addrs else port
 
     file_list = "  ".join(f"[cyan]{f.name}[/cyan]" for f in files)
-    mode_label = "[bold green]serve-forever[/bold green]" if serve_forever else "[dim]single-shot[/dim]"
+    mode_label = (
+        "[bold green]serve-forever[/bold green]" if serve_forever else "[dim]single-shot[/dim]"
+    )
     console.print(
         f"\n[bold]Yesterwind sz[/bold]  {mode_label}\n"
         f"  Listening on [bold white]{host}:{actual_port}[/bold white]\n"
