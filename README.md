@@ -1,8 +1,13 @@
 # Yesterwind XYZ-modem
 
+[![CI](https://github.com/ehwio/yesterwind-xyzmodem/actions/workflows/ci.yml/badge.svg)](https://github.com/ehwio/yesterwind-xyzmodem/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/yesterwind-xyzmodem)](https://pypi.org/project/yesterwind-xyzmodem/)
+[![Python](https://img.shields.io/pypi/pyversions/yesterwind-xyzmodem)](https://pypi.org/project/yesterwind-xyzmodem/)
+[![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)](https://github.com/ehwio/yesterwind-xyzmodem/actions/workflows/ci.yml)
+
 Pure-Python async implementation of the X-, Y-, and Z-Modem file transfer
 protocols.  No subprocesses, no external tools — everything is implemented
-in Python 3.10+.
+in Python 3.9+.
 
 ## Installation
 
