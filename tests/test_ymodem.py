@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import io
-import os
 import time
 
 import pytest
@@ -13,12 +12,12 @@ from yesterwind_xyzmodem.callbacks import EventType
 from yesterwind_xyzmodem.constants import ACK, CAN, CRC_MODE, EOT, NAK, SOH, STX, SUB
 from yesterwind_xyzmodem.crc import crc16
 from yesterwind_xyzmodem.exceptions import TransferCancelled, TransferFailed, TransferTimeout
-from yesterwind_xyzmodem.ymodem import YModem, _DATA_BLOCK_SIZE, _HEADER_BLOCK_SIZE
-
+from yesterwind_xyzmodem.ymodem import _DATA_BLOCK_SIZE, _HEADER_BLOCK_SIZE, YModem
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_header_block(filename: str, size: int, mtime: int) -> bytes:
     meta = f"{filename}\x00{size} {mtime:o}"
@@ -48,8 +47,8 @@ def _empty_header() -> bytes:
 # Send tests
 # ---------------------------------------------------------------------------
 
-class TestYModemSend:
 
+class TestYModemSend:
     async def test_send_single_file(self, piped, event_log):
         """Sender transfers one file to a standard receiver."""
         file_data = b"A" * 512
@@ -73,7 +72,7 @@ class TestYModemSend:
             assert eot == EOT
             await piped.side_b.write(bytes([ACK]))
             # Empty batch-end header
-            end_hdr = await piped.side_b.read(3 + _HEADER_BLOCK_SIZE + 2)
+            await piped.side_b.read(3 + _HEADER_BLOCK_SIZE + 2)
             await piped.side_b.write(bytes([ACK]))
 
         await asyncio.gather(
@@ -193,8 +192,8 @@ class TestYModemSend:
 # Receive tests
 # ---------------------------------------------------------------------------
 
-class TestYModemReceive:
 
+class TestYModemReceive:
     async def test_receive_single_file(self, piped, event_log, tmp_path):
         """Receiver writes correct file data and metadata."""
         file_data = b"F" * 200
@@ -231,7 +230,8 @@ class TestYModemReceive:
         )
         assert len(paths[0]) == 1
         dest = paths[0][0]
-        assert open(dest, "rb").read() == file_data
+        with open(dest, "rb") as f:
+            assert f.read() == file_data
         types = event_log.types()
         assert EventType.FILE_START in types
         assert EventType.FILE_END in types
@@ -263,7 +263,8 @@ class TestYModemReceive:
             await piped.side_a.read_byte()
 
         paths = await asyncio.gather(receiver_engine.receive(str(tmp_path)), sender())
-        assert open(paths[0][0], "rb").read() == file_data
+        with open(paths[0][0], "rb") as f:
+            assert f.read() == file_data
 
     async def test_receive_cancel_during_data(self, piped, tmp_path):
         """Receiver raises TransferCancelled when CAN arrives during data blocks."""
@@ -271,9 +272,7 @@ class TestYModemReceive:
 
         async def sender():
             await piped.side_a.read_byte()
-            await piped.side_a.write(
-                _make_header_block("x.bin", 1024, int(time.time()))
-            )
+            await piped.side_a.write(_make_header_block("x.bin", 1024, int(time.time())))
             await piped.side_a.read_byte()  # ACK
             await piped.side_a.read_byte()  # C
             await piped.side_a.write(bytes([CAN]))
@@ -287,9 +286,7 @@ class TestYModemReceive:
 
         async def sender():
             await piped.side_a.read_byte()
-            await piped.side_a.write(
-                _make_header_block("y.bin", 1024, int(time.time()))
-            )
+            await piped.side_a.write(_make_header_block("y.bin", 1024, int(time.time())))
             await piped.side_a.read_byte()  # ACK
             await piped.side_a.read_byte()  # C
             # Send nothing
@@ -300,14 +297,13 @@ class TestYModemReceive:
     async def test_receive_crc_error_in_data(self, piped, event_log, tmp_path):
         """Receiver fires CRC_ERROR and NAKs corrupt data block."""
         file_data = b"H" * _DATA_BLOCK_SIZE
-        receiver_engine = YModem(piped.side_b, timeout=0.5, retry_limit=5,
-                                  callback=event_log.callback)
+        receiver_engine = YModem(
+            piped.side_b, timeout=0.5, retry_limit=5, callback=event_log.callback
+        )
 
         async def sender():
             await piped.side_a.read_byte()
-            await piped.side_a.write(
-                _make_header_block("h.bin", len(file_data), int(time.time()))
-            )
+            await piped.side_a.write(_make_header_block("h.bin", len(file_data), int(time.time())))
             await piped.side_a.read_byte()
             await piped.side_a.read_byte()
             # Corrupt block
@@ -348,4 +344,5 @@ class TestYModemReceive:
             await piped.side_a.read_byte()
 
         paths = await asyncio.gather(receiver_engine.receive(str(tmp_path)), sender())
-        assert open(paths[0][0], "rb").read() == actual
+        with open(paths[0][0], "rb") as f:
+            assert f.read() == actual

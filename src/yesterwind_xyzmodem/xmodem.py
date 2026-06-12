@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import io
-from typing import BinaryIO, Optional
+from typing import BinaryIO
 
 from yesterwind_xyzmodem.callbacks import EventType, ProgressCallback, TransferProgress, fire
 from yesterwind_xyzmodem.constants import (
@@ -66,7 +66,7 @@ class XModem:
         timeout: float = DEFAULT_TIMEOUT,
         retry_limit: int = DEFAULT_RETRY_LIMIT,
         block_size: int = 128,
-        callback: Optional[ProgressCallback] = None,
+        callback: ProgressCallback | None = None,
     ) -> None:
         if block_size not in (128, 1024):
             raise ValueError("block_size must be 128 or 1024")
@@ -219,10 +219,12 @@ class XModem:
             progress.event = EventType.BLOCK_NAK
             await fire(self._callback, progress)
 
-        raise TransferFailed(f"Block {block_num} not acknowledged after {self._retry_limit} attempts")
+        raise TransferFailed(
+            f"Block {block_num} not acknowledged after {self._retry_limit} attempts"
+        )
 
     async def _send_eot(self) -> None:
-        for attempt in range(self._retry_limit):
+        for _attempt in range(self._retry_limit):
             await self._transport.write(bytes([EOT]))
             try:
                 resp = await self._transport.read_byte_with_timeout(self._timeout)
@@ -255,10 +257,10 @@ class XModem:
         while True:
             try:
                 header = await self._transport.read_byte_with_timeout(self._timeout)
-            except asyncio.TimeoutError:
+            except asyncio.TimeoutError as err:
                 consecutive_errors += 1
                 if consecutive_errors >= self._retry_limit:
-                    raise TransferTimeout("Timed out waiting for data block")
+                    raise TransferTimeout("Timed out waiting for data block") from err
                 progress.event = EventType.TIMEOUT
                 await fire(self._callback, progress)
                 await self._transport.write(bytes([NAK]))
@@ -338,9 +340,7 @@ class XModem:
             if block_num != expected_block:
                 # Out-of-sequence: cancel
                 await self._transport.write(bytes([CAN, CAN]))
-                raise ProtocolError(
-                    f"Expected block {expected_block}, got {block_num}"
-                )
+                raise ProtocolError(f"Expected block {expected_block}, got {block_num}")
 
             buffer.write(data)
             bytes_received += block_size

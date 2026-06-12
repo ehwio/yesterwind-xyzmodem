@@ -4,22 +4,19 @@ from __future__ import annotations
 
 import asyncio
 import io
-import os
 import time
 
 import pytest
 
 from yesterwind_xyzmodem.callbacks import EventType
-from yesterwind_xyzmodem.crc import crc16, crc32
+from yesterwind_xyzmodem.crc import crc32
 from yesterwind_xyzmodem.exceptions import (
     ProtocolError,
     TransferCancelled,
-    TransferFailed,
-    TransferTimeout,
 )
 from yesterwind_xyzmodem.zmodem import (
-    ZACK,
     ZABORT,
+    ZACK,
     ZBIN32,
     ZCRCE,
     ZCRCG,
@@ -27,11 +24,11 @@ from yesterwind_xyzmodem.zmodem import (
     ZDATA,
     ZDLE,
     ZEOF,
-    ZFIN,
     ZFILE,
+    ZFIN,
+    ZRINIT,
     ZRPOS,
     ZRQINIT,
-    ZRINIT,
     ZModem,
     _build_bin32_header,
     _build_hex_header,
@@ -39,13 +36,12 @@ from yesterwind_xyzmodem.zmodem import (
     _zdle_encode,
 )
 
-
 # ---------------------------------------------------------------------------
 # Unit tests for framing helpers
 # ---------------------------------------------------------------------------
 
-class TestFramingHelpers:
 
+class TestFramingHelpers:
     def test_zdle_encode_passthrough(self):
         data = bytes(range(32, 128))
         assert _zdle_encode(data) == data
@@ -80,8 +76,8 @@ class TestFramingHelpers:
 # Integration: full send/receive over piped transport
 # ---------------------------------------------------------------------------
 
-class TestZModemSend:
 
+class TestZModemSend:
     async def test_send_single_file(self, piped, event_log):
         """Sender completes a single-file transfer with the receiver."""
         file_data = b"Z" * 128
@@ -201,7 +197,6 @@ class TestZModemSend:
 
 
 class TestZModemReceive:
-
     async def test_receive_single_file(self, piped, event_log, tmp_path):
         """Receiver writes file correctly from sender."""
         file_data = b"Y" * 200
@@ -235,7 +230,8 @@ class TestZModemReceive:
             receiver_engine.receive(str(tmp_path)),
             sender(),
         )
-        assert open(paths[0][0], "rb").read() == file_data
+        with open(paths[0][0], "rb") as f:
+            assert f.read() == file_data
         assert EventType.FILE_START in event_log.types()
         assert EventType.SESSION_END in event_log.types()
 
@@ -300,7 +296,8 @@ class TestZModemReceive:
             receiver_engine.receive(str(tmp_path)),
             sender(),
         )
-        assert open(paths[0][0], "rb").read() == file_data
+        with open(paths[0][0], "rb") as f:
+            assert f.read() == file_data
 
     async def test_receive_zcrcw_sends_zack(self, piped, tmp_path):
         """Receiver sends ZACK when it gets a ZCRCW subpacket."""
@@ -327,12 +324,14 @@ class TestZModemReceive:
             await _read_hex_frame(piped.side_a)
 
         paths = await asyncio.gather(receiver_engine.receive(str(tmp_path)), sender())
-        assert open(paths[0][0], "rb").read() == file_data
+        with open(paths[0][0], "rb") as f:
+            assert f.read() == file_data
 
 
 # ---------------------------------------------------------------------------
 # Low-level helpers for the receiver side of tests
 # ---------------------------------------------------------------------------
+
 
 async def _scan_to_zdle(transport, timeout: float = 10.0) -> None:
     for _ in range(512):
@@ -409,10 +408,9 @@ async def _read_subpacket_with_term(transport, timeout: float = 10.0) -> tuple[b
 
 async def _write_subpacket(transport, data: bytes, term: int) -> None:
     from yesterwind_xyzmodem.zmodem import _zdle_encode
+
     crc_input = data + bytes([term])
     c = crc32(crc_input)
     encoded = _zdle_encode(data)
-    crc_bytes = _zdle_encode(
-        bytes([c & 0xFF, (c >> 8) & 0xFF, (c >> 16) & 0xFF, (c >> 24) & 0xFF])
-    )
+    crc_bytes = _zdle_encode(bytes([c & 0xFF, (c >> 8) & 0xFF, (c >> 16) & 0xFF, (c >> 24) & 0xFF]))
     await transport.write(encoded + bytes([ZDLE, term]) + crc_bytes)

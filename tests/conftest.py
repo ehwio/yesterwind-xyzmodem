@@ -9,19 +9,17 @@ two-party serial connection without any OS I/O.
 from __future__ import annotations
 
 import asyncio
-import io
 from dataclasses import dataclass, field
-from typing import Optional
 
 import pytest
 
-from yesterwind_xyzmodem.callbacks import EventType, ProgressCallback, TransferProgress
-from yesterwind_xyzmodem.transport import MemoryTransport
+from yesterwind_xyzmodem.callbacks import EventType, TransferProgress
 
 
 @dataclass
 class EventLog:
     """Collects all progress callbacks for assertions."""
+
     events: list[TransferProgress] = field(default_factory=list)
 
     def callback(self, p: TransferProgress) -> None:

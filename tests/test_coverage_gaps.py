@@ -14,36 +14,34 @@ import time
 
 import pytest
 
+from tests.test_zmodem import (
+    _read_bin32_frame,
+    _read_hex_frame,
+    _read_subpacket,
+    _read_subpacket_with_term,
+    _write_subpacket,
+)
 from yesterwind_xyzmodem.callbacks import EventType
 from yesterwind_xyzmodem.constants import ACK, CAN, CRC_MODE, EOT, NAK, SOH, STX, SUB
 from yesterwind_xyzmodem.crc import crc16
 from yesterwind_xyzmodem.exceptions import TransferCancelled, TransferFailed, TransferTimeout
 from yesterwind_xyzmodem.xmodem import XModem
-from yesterwind_xyzmodem.ymodem import YModem, _DATA_BLOCK_SIZE, _HEADER_BLOCK_SIZE
+from yesterwind_xyzmodem.ymodem import _DATA_BLOCK_SIZE, _HEADER_BLOCK_SIZE, YModem
 from yesterwind_xyzmodem.zmodem import (
     ZABORT,
-    ZACK,
     ZCRCE,
     ZCRCW,
     ZDATA,
     ZDLE,
     ZEOF,
-    ZFIN,
     ZFILE,
-    ZRPOS,
+    ZFIN,
     ZRINIT,
-    ZRQINIT,
+    ZRPOS,
     ZModem,
-    _build_hex_header,
     _build_bin32_header,
+    _build_hex_header,
     _encode_offset,
-)
-from tests.test_zmodem import (
-    _read_hex_frame,
-    _read_bin32_frame,
-    _read_subpacket,
-    _read_subpacket_with_term,
-    _write_subpacket,
 )
 
 
@@ -74,11 +72,12 @@ def _empty_header() -> bytes:
 # XModem: uncovered branch (truncated rest)
 # ---------------------------------------------------------------------------
 
-class TestXModemCoverage:
 
+class TestXModemCoverage:
     async def test_receive_truncated_rest(self, piped):
         """lines 301-303: rest shorter than frame_size triggers NAK."""
         from yesterwind_xyzmodem.constants import SOH
+
         payload = b"Q" * 128
 
         receiver_engine = XModem(piped.side_b, timeout=0.3, retry_limit=4)
@@ -107,8 +106,8 @@ class TestXModemCoverage:
 # _wait_for_c CAN/timeout/fail, _send_block_with_retry timeout
 # ---------------------------------------------------------------------------
 
-class TestYModemSenderCoverage:
 
+class TestYModemSenderCoverage:
     async def test_send_eot_can(self, piped):
         """lines 273-274: CAN received on EOT."""
         file_data = b"A" * _DATA_BLOCK_SIZE
@@ -119,7 +118,7 @@ class TestYModemSenderCoverage:
             await piped.side_b.read(3 + _HEADER_BLOCK_SIZE + 2)  # block0
             await piped.side_b.write(bytes([ACK]))
             await piped.side_b.write(bytes([CRC_MODE]))
-            await piped.side_b.read(3 + _DATA_BLOCK_SIZE + 2)   # data
+            await piped.side_b.read(3 + _DATA_BLOCK_SIZE + 2)  # data
             await piped.side_b.write(bytes([ACK]))
             eot = await piped.side_b.read_byte()
             assert eot == EOT
@@ -248,8 +247,8 @@ class TestYModemSenderCoverage:
 #                  data block timeout/cancel
 # ---------------------------------------------------------------------------
 
-class TestYModemReceiverCoverage:
 
+class TestYModemReceiverCoverage:
     async def test_block0_timeout_then_success(self, piped, tmp_path):
         """lines 337-339: _receive_block0 times out, NAKs, then recovers."""
         file_data = b"H" * 128
@@ -258,7 +257,7 @@ class TestYModemReceiverCoverage:
 
         async def sender():
             await piped.side_a.read_byte()  # 'C'
-            await asyncio.sleep(0.08)        # cause one timeout
+            await asyncio.sleep(0.08)  # cause one timeout
             await piped.side_a.read_byte()  # consume NAK
             await piped.side_a.write(_make_header_block("h.bin", len(file_data), mtime))
             await piped.side_a.read_byte()  # ACK
@@ -282,7 +281,7 @@ class TestYModemReceiverCoverage:
         async def sender():
             await piped.side_a.read_byte()
             await piped.side_a.write(bytes([0xFF]))  # garbage
-            await piped.side_a.read_byte()           # NAK
+            await piped.side_a.read_byte()  # NAK
             await piped.side_a.write(_make_header_block("i.bin", len(file_data), mtime))
             await piped.side_a.read_byte()
             await piped.side_a.read_byte()
@@ -307,7 +306,9 @@ class TestYModemReceiverCoverage:
             # Send block0 with wrong block complement
             payload = bytes(_HEADER_BLOCK_SIZE)
             c = crc16(payload)
-            bad = bytes([SOH, 0x00, 0x00]) + payload + bytes([c >> 8, c & 0xFF])  # 0xFF complement broken
+            bad = (
+                bytes([SOH, 0x00, 0x00]) + payload + bytes([c >> 8, c & 0xFF])
+            )  # 0xFF complement broken
             await piped.side_a.write(bad)
             await piped.side_a.read_byte()  # NAK
             await piped.side_a.write(_make_header_block("j.bin", len(file_data), mtime))
@@ -330,7 +331,7 @@ class TestYModemReceiverCoverage:
         async def sender():
             await piped.side_a.read_byte()
             # Block 0 with no NUL → empty filename
-            payload = b"\xFF" * _HEADER_BLOCK_SIZE
+            payload = b"\xff" * _HEADER_BLOCK_SIZE
             c = crc16(payload)
             frame = bytes([SOH, 0x00, 0xFF]) + payload + bytes([c >> 8, c & 0xFF])
             await piped.side_a.write(frame)
@@ -402,14 +403,13 @@ class TestYModemReceiverCoverage:
 
     async def test_receive_data_timeout(self, piped, tmp_path, event_log):
         """ymodem receiver data timeout fires TIMEOUT event."""
-        receiver_engine = YModem(piped.side_b, timeout=0.05, retry_limit=2,
-                                  callback=event_log.callback)
+        receiver_engine = YModem(
+            piped.side_b, timeout=0.05, retry_limit=2, callback=event_log.callback
+        )
 
         async def sender():
             await piped.side_a.read_byte()
-            await piped.side_a.write(
-                _make_header_block("m.bin", 1024, int(time.time()))
-            )
+            await piped.side_a.write(_make_header_block("m.bin", 1024, int(time.time())))
             await piped.side_a.read_byte()
             await piped.side_a.read_byte()
             # Delay to cause one timeout, then ACK the NAK
@@ -424,13 +424,12 @@ class TestYModemReceiverCoverage:
     async def test_receive_data_out_of_sequence_cancels(self, piped, tmp_path):
         """ymodem receiver raises ProtocolError on wrong block sequence."""
         from yesterwind_xyzmodem.exceptions import ProtocolError
+
         receiver_engine = YModem(piped.side_b, timeout=0.5, retry_limit=3)
 
         async def sender():
             await piped.side_a.read_byte()
-            await piped.side_a.write(
-                _make_header_block("n.bin", 1024, int(time.time()))
-            )
+            await piped.side_a.write(_make_header_block("n.bin", 1024, int(time.time())))
             await piped.side_a.read_byte()
             await piped.side_a.read_byte()
             # Send block 3 when block 1 is expected
@@ -471,8 +470,8 @@ class TestYModemReceiverCoverage:
 # ZModem: missing branches
 # ---------------------------------------------------------------------------
 
-class TestZModemCoverage:
 
+class TestZModemCoverage:
     async def test_send_multiple_files(self, piped):
         """lines 223-224: send loop over more than one file."""
         file_a = b"P" * 128
@@ -483,7 +482,7 @@ class TestZModemCoverage:
             await _read_hex_frame(piped.side_b)  # ZRQINIT
             await piped.side_b.write(_build_hex_header(ZRINIT, 0x23, 0, 0, 0))
 
-            for fdata in (file_a, file_b):
+            for _fdata in (file_a, file_b):
                 frame = await _read_hex_frame(piped.side_b)
                 assert frame[0] == ZFILE
                 await _read_subpacket(piped.side_b)
@@ -502,10 +501,12 @@ class TestZModemCoverage:
             await piped.side_b.write(_build_hex_header(ZFIN, 0, 0, 0, 0))
 
         total = await asyncio.gather(
-            sender.send([
-                ("p.bin", io.BytesIO(file_a), len(file_a)),
-                ("q.bin", io.BytesIO(file_b), len(file_b)),
-            ]),
+            sender.send(
+                [
+                    ("p.bin", io.BytesIO(file_a), len(file_a)),
+                    ("q.bin", io.BytesIO(file_b), len(file_b)),
+                ]
+            ),
             receiver(),
         )
         assert total[0] == len(file_a) + len(file_b)
@@ -565,6 +566,7 @@ class TestZModemCoverage:
     async def test_send_skip_raises_cancel(self, piped):
         """lines 345-346: ZSKIP from receiver raises TransferCancelled."""
         from yesterwind_xyzmodem.zmodem import ZSKIP
+
         file_data = b"T" * 64
         sender = ZModem(piped.side_a, timeout=1.0)
 
@@ -591,7 +593,7 @@ class TestZModemCoverage:
             await piped.side_a.write(_build_hex_header(ZFILE, 0, 0, 0, 0))
             info = f"u.bin\x00128 {int(time.time()):o}"
             await _write_subpacket(piped.side_a, info.encode(), ZCRCW)
-            await _read_hex_frame(piped.side_a)   # ZRPOS
+            await _read_hex_frame(piped.side_a)  # ZRPOS
             await piped.side_a.write(_build_bin32_header(ZDATA, 0, 0, 0, 0))
             # Send ZABORT instead of data
             await piped.side_a.write(_build_hex_header(ZABORT, 0, 0, 0, 0))
@@ -625,6 +627,7 @@ class TestZModemCoverage:
     async def test_zmodem_hex_header_crc_error(self, piped):
         """lines 490-491: ProtocolError on bad CRC in hex header."""
         from yesterwind_xyzmodem.exceptions import ProtocolError
+
         receiver_engine = ZModem(piped.side_b, timeout=1.0)
 
         async def sender():
@@ -636,13 +639,13 @@ class TestZModemCoverage:
 
         with pytest.raises((ProtocolError, Exception)):
             await asyncio.wait_for(
-                asyncio.gather(receiver_engine.receive(str(piped)), sender()),
-                timeout=2.0
+                asyncio.gather(receiver_engine.receive(str(piped)), sender()), timeout=2.0
             )
 
     async def test_zmodem_receive_no_zdle_in_scan(self, piped, tmp_path):
         """lines 453-454, 458: ProtocolError when scan limit reached without ZDLE."""
         from yesterwind_xyzmodem.exceptions import ProtocolError, TransferTimeout
+
         receiver_engine = ZModem(piped.side_b, timeout=0.5)
 
         async def sender():
@@ -652,13 +655,13 @@ class TestZModemCoverage:
 
         with pytest.raises((ProtocolError, TransferTimeout)):
             await asyncio.wait_for(
-                asyncio.gather(receiver_engine.receive(str(tmp_path)), sender()),
-                timeout=2.0
+                asyncio.gather(receiver_engine.receive(str(tmp_path)), sender()), timeout=2.0
             )
 
     async def test_zmodem_unknown_header_format(self, piped, tmp_path):
         """line 468: ProtocolError on unknown header format byte."""
         from yesterwind_xyzmodem.exceptions import ProtocolError, TransferTimeout
+
         receiver_engine = ZModem(piped.side_b, timeout=0.5)
 
         async def sender():
@@ -668,14 +671,14 @@ class TestZModemCoverage:
 
         with pytest.raises((ProtocolError, TransferTimeout)):
             await asyncio.wait_for(
-                asyncio.gather(receiver_engine.receive(str(tmp_path)), sender()),
-                timeout=2.0
+                asyncio.gather(receiver_engine.receive(str(tmp_path)), sender()), timeout=2.0
             )
 
     async def test_zmodem_bin_header_crc_error(self, piped, tmp_path):
         """lines 499-500, 509-510: ProtocolError on bad ZBIN / ZBIN32 CRC."""
         from yesterwind_xyzmodem.exceptions import ProtocolError, TransferTimeout
-        from yesterwind_xyzmodem.zmodem import ZBIN, ZBIN32
+        from yesterwind_xyzmodem.zmodem import ZBIN32
+
         receiver_engine = ZModem(piped.side_b, timeout=0.5)
 
         async def sender():
@@ -686,8 +689,7 @@ class TestZModemCoverage:
 
         with pytest.raises((ProtocolError, TransferTimeout)):
             await asyncio.wait_for(
-                asyncio.gather(receiver_engine.receive(str(tmp_path)), sender()),
-                timeout=2.0
+                asyncio.gather(receiver_engine.receive(str(tmp_path)), sender()), timeout=2.0
             )
 
     async def test_zmodem_send_fzpos_no_response(self, piped):
@@ -711,6 +713,7 @@ class TestZModemCoverage:
     async def test_zmodem_send_zrqinit_wrong_response(self, piped):
         """lines 298->247: wrong frame type after ZRQINIT raises ProtocolError."""
         from yesterwind_xyzmodem.exceptions import ProtocolError
+
         sender = ZModem(piped.side_a, timeout=1.0)
 
         async def receiver():

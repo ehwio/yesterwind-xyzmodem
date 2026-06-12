@@ -1,7 +1,9 @@
 """Tests for MemoryTransport."""
 
 import asyncio
+
 import pytest
+
 from yesterwind_xyzmodem.transport import MemoryTransport
 
 
@@ -18,7 +20,7 @@ async def test_read_eof_raises():
 
 
 async def test_read_byte_returns_int():
-    t = MemoryTransport(b"\xFF")
+    t = MemoryTransport(b"\xff")
     assert await t.read_byte() == 0xFF
 
 
@@ -55,7 +57,7 @@ async def test_read_with_timeout_empty_raises():
 
 
 async def test_read_byte_with_timeout_returns_int():
-    t = MemoryTransport(b"\xAB")
+    t = MemoryTransport(b"\xab")
     assert await t.read_byte_with_timeout(1.0) == 0xAB
 
 

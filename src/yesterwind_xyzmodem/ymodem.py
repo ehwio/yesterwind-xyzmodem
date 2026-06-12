@@ -13,10 +13,12 @@ writes this metadata automatically.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import io
 import os
 import time
-from typing import BinaryIO, Iterable, Optional, Sequence, Tuple
+from collections.abc import Sequence
+from typing import BinaryIO
 
 from yesterwind_xyzmodem.callbacks import EventType, ProgressCallback, TransferProgress, fire
 from yesterwind_xyzmodem.constants import (
@@ -70,7 +72,7 @@ class YModem:
         timeout: float = DEFAULT_TIMEOUT,
         retry_limit: int = DEFAULT_RETRY_LIMIT,
         g_mode: bool = False,
-        callback: Optional[ProgressCallback] = None,
+        callback: ProgressCallback | None = None,
     ) -> None:
         self._transport = transport
         self._timeout = timeout
@@ -83,7 +85,7 @@ class YModem:
 
     async def send(
         self,
-        files: Sequence[Tuple[str, BinaryIO, int]],
+        files: Sequence[tuple[str, BinaryIO, int]],
     ) -> int:
         """
         Send a batch of files.
@@ -219,10 +221,7 @@ class YModem:
 
     async def _send_block0(self, filename: str, size: int, mtime: int) -> None:
         """Build and send YModem block 0 (file header)."""
-        if filename:
-            meta = f"{filename}\x00{size} {mtime:o}"
-        else:
-            meta = ""
+        meta = f"{filename}\x00{size} {mtime:o}" if filename else ""
         payload = meta.encode("ascii", errors="replace")
         payload = payload[:_HEADER_BLOCK_SIZE].ljust(_HEADER_BLOCK_SIZE, b"\x00")
         c = crc16(payload)
@@ -280,7 +279,7 @@ class YModem:
         block_num: int,
         progress: TransferProgress,
     ) -> None:
-        for attempt in range(self._retry_limit):
+        for _attempt in range(self._retry_limit):
             await self._transport.write(frame)
             try:
                 resp = await self._transport.read_byte_with_timeout(self._timeout)
@@ -294,7 +293,9 @@ class YModem:
                 raise TransferCancelled("Remote cancelled")
             progress.event = EventType.BLOCK_NAK
             await fire(self._callback, progress)
-        raise TransferFailed(f"Block {block_num} not acknowledged after {self._retry_limit} attempts")
+        raise TransferFailed(
+            f"Block {block_num} not acknowledged after {self._retry_limit} attempts"
+        )
 
     async def _wait_for_ack(self) -> None:
         for _ in range(self._retry_limit):
@@ -321,10 +322,8 @@ class YModem:
         raise TransferFailed("Expected 'C', got nothing")
 
     async def _wait_for_ack_or_ignore(self) -> None:
-        try:
+        with contextlib.suppress(asyncio.TimeoutError):
             await self._transport.read_byte_with_timeout(self._timeout)
-        except asyncio.TimeoutError:
-            pass
 
     # ------------------------------------------------------------------
     # Receiver helpers
@@ -382,15 +381,11 @@ class YModem:
             if meta_bytes:
                 parts = meta_bytes.decode("ascii", errors="replace").split()
                 if parts:
-                    try:
+                    with contextlib.suppress(ValueError):
                         size = int(parts[0])
-                    except ValueError:
-                        pass
                 if len(parts) > 1:
-                    try:
+                    with contextlib.suppress(ValueError):
                         mtime = int(parts[1], 8)
-                    except ValueError:
-                        pass
 
             return (filename, size, mtime)
 
@@ -410,10 +405,10 @@ class YModem:
         while True:
             try:
                 header = await self._transport.read_byte_with_timeout(self._timeout)
-            except asyncio.TimeoutError:
+            except asyncio.TimeoutError as err:
                 consecutive_errors += 1
                 if consecutive_errors >= self._retry_limit:
-                    raise TransferTimeout("Timed out waiting for data")
+                    raise TransferTimeout("Timed out waiting for data") from err
                 await self._transport.write(bytes([NAK]))
                 continue
 
@@ -429,9 +424,7 @@ class YModem:
 
             block_size = 128 if header == SOH else _DATA_BLOCK_SIZE
             try:
-                rest = await self._transport.read_with_timeout(
-                    block_size + 4, self._timeout
-                )
+                rest = await self._transport.read_with_timeout(block_size + 4, self._timeout)
             except asyncio.TimeoutError:
                 consecutive_errors += 1
                 await self._transport.write(bytes([NAK]))

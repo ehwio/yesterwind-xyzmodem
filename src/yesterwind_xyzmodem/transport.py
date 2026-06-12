@@ -36,7 +36,7 @@ class Transport(ABC):
     async def read_byte_with_timeout(self, timeout: float) -> int:
         """Like read_byte(), but raise asyncio.TimeoutError after *timeout* seconds."""
 
-    async def purge(self) -> None:  # pragma: no cover
+    async def purge(self) -> None:  # pragma: no cover  # noqa: B027
         """Discard any bytes currently buffered in the receive path."""
 
 
@@ -86,8 +86,8 @@ class MemoryTransport(Transport):
     """
 
     def __init__(self, tx_data: bytes = b"") -> None:
-        self._tx = io.BytesIO(tx_data)   # data the protocol will *read*
-        self._rx = io.BytesIO()          # data the protocol *wrote*
+        self._tx = io.BytesIO(tx_data)  # data the protocol will *read*
+        self._rx = io.BytesIO()  # data the protocol *wrote*
         self._rx_pos = 0
         self._lock = asyncio.Lock()
 

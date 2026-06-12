@@ -1,6 +1,5 @@
 """Tests for CRC routines."""
 
-import pytest
 from yesterwind_xyzmodem.crc import checksum, crc16, crc16_valid, crc32, crc32_valid
 
 
@@ -33,6 +32,7 @@ def test_checksum_overflow():
 def test_crc32_known_value():
     # Python's binascii.crc32 uses the same poly
     import binascii
+
     data = b"123456789"
     expected = binascii.crc32(data) & 0xFFFFFFFF
     assert crc32(data) == expected
@@ -55,7 +55,6 @@ def test_crc32_incremental():
     data = b"hello world"
     full = crc32(data)
     # Incremental: feed half, then the other half
-    mid = crc32(data[:5])
     # Re-run full; incremental is a separate concern tested via integration
     assert full == crc32(data)
 
@@ -66,5 +65,6 @@ def test_crc16_bytearray():
 
 def test_crc32_bytearray():
     import binascii
+
     data = bytearray(b"abc")
     assert crc32(data) == (binascii.crc32(data) & 0xFFFFFFFF)

@@ -30,14 +30,15 @@ References: Chuck Forsberg's ZMODEM.DOC and lrzsz source.
 from __future__ import annotations
 
 import asyncio
-import io
+import contextlib
 import os
 import stat
 import time
-from typing import BinaryIO, Optional, Sequence, Tuple
+from collections.abc import Sequence
+from typing import BinaryIO
 
 from yesterwind_xyzmodem.callbacks import EventType, ProgressCallback, TransferProgress, fire
-from yesterwind_xyzmodem.constants import CAN, DEFAULT_RETRY_LIMIT, DEFAULT_TIMEOUT
+from yesterwind_xyzmodem.constants import DEFAULT_RETRY_LIMIT, DEFAULT_TIMEOUT
 from yesterwind_xyzmodem.crc import crc16, crc32
 from yesterwind_xyzmodem.exceptions import (
     ProtocolError,
@@ -51,37 +52,37 @@ from yesterwind_xyzmodem.transport import Transport
 # ZModem constants
 # ---------------------------------------------------------------------------
 
-ZDLE = 0x18   # Escape character
+ZDLE = 0x18  # Escape character
 
 # Header frame types
-ZRQINIT  = 0   # Request receive init
-ZRINIT   = 1   # Receive init
-ZSINIT   = 2   # Send init sequence (optional)
-ZACK     = 3   # ACK to ZRQINIT or ZSINIT or data
-ZFILE    = 4   # File name from sender
-ZSKIP    = 5   # Skip this file (receiver request)
-ZNAK     = 6   # Last packet garbled
-ZABORT   = 7   # Abort batch transfers
-ZFIN     = 8   # Finish session
-ZRPOS    = 9   # Resume transfer at offset
-ZDATA    = 10  # Data packet(s) follow
-ZEOF     = 11  # End of file
-ZFERR    = 12  # Fatal Read or Write error
-ZCRC     = 13  # Request for file CRC and response
+ZRQINIT = 0  # Request receive init
+ZRINIT = 1  # Receive init
+ZSINIT = 2  # Send init sequence (optional)
+ZACK = 3  # ACK to ZRQINIT or ZSINIT or data
+ZFILE = 4  # File name from sender
+ZSKIP = 5  # Skip this file (receiver request)
+ZNAK = 6  # Last packet garbled
+ZABORT = 7  # Abort batch transfers
+ZFIN = 8  # Finish session
+ZRPOS = 9  # Resume transfer at offset
+ZDATA = 10  # Data packet(s) follow
+ZEOF = 11  # End of file
+ZFERR = 12  # Fatal Read or Write error
+ZCRC = 13  # Request for file CRC and response
 ZCHALLENGE = 14
-ZCOMPL   = 15
-ZCAN     = 16  # Cancel
+ZCOMPL = 15
+ZCAN = 16  # Cancel
 
 # Header format bytes (after ZDLE)
-ZHEX   = ord("B")
-ZBIN   = ord("A")
+ZHEX = ord("B")
+ZBIN = ord("A")
 ZBIN32 = ord("C")
 
 # Data subpacket terminator bytes (sent after ZDLE)
-ZCRCW = ord("k")   # 0x6B — end subpacket, wait for ACK
-ZCRCG = ord("j")   # 0x6A — end subpacket, continue
-ZCRCE = ord("h")   # 0x68 — end of file
-ZCRCQ = ord("i")   # 0x69 — end subpacket, request ZACK
+ZCRCW = ord("k")  # 0x6B — end subpacket, wait for ACK
+ZCRCG = ord("j")  # 0x6A — end subpacket, continue
+ZCRCE = ord("h")  # 0x68 — end of file
+ZCRCQ = ord("i")  # 0x69 — end subpacket, request ZACK
 
 # Bytes that must be escaped with ZDLE
 _MUST_ESCAPE = {0x11, 0x13, 0x91, 0x93, ZDLE}
@@ -96,6 +97,7 @@ ZMODEM_INIT = b"**\x18B01"
 # ---------------------------------------------------------------------------
 # Low-level framing helpers
 # ---------------------------------------------------------------------------
+
 
 def _zdle_encode(data: bytes) -> bytes:
     """Escape ZDLE-special bytes in *data*."""
@@ -127,7 +129,9 @@ def _build_bin32_header(frame_type: int, f0: int, f1: int, f2: int, f3: int) -> 
     """Build a ZBIN32 header frame.  Same wire order as _build_hex_header."""
     payload = bytes([frame_type, f0, f1, f2, f3])
     c = crc32(payload)
-    encoded = _zdle_encode(payload + bytes([c & 0xFF, (c >> 8) & 0xFF, (c >> 16) & 0xFF, (c >> 24) & 0xFF]))
+    encoded = _zdle_encode(
+        payload + bytes([c & 0xFF, (c >> 8) & 0xFF, (c >> 16) & 0xFF, (c >> 24) & 0xFF])
+    )
     return bytes([ZDLE, ZBIN32]) + encoded
 
 
@@ -144,6 +148,7 @@ def _encode_offset(offset: int) -> tuple[int, int, int, int]:
 # ---------------------------------------------------------------------------
 # ZModem engine
 # ---------------------------------------------------------------------------
+
 
 class ZModem:
     """
@@ -167,7 +172,7 @@ class ZModem:
         *,
         timeout: float = DEFAULT_TIMEOUT,
         retry_limit: int = DEFAULT_RETRY_LIMIT,
-        callback: Optional[ProgressCallback] = None,
+        callback: ProgressCallback | None = None,
     ) -> None:
         self._transport = transport
         self._timeout = timeout
@@ -179,7 +184,7 @@ class ZModem:
 
     async def send(
         self,
-        files: Sequence[Tuple[str, BinaryIO, int]],
+        files: Sequence[tuple[str, BinaryIO, int]],
     ) -> int:
         """
         Send a batch of files.
@@ -223,10 +228,8 @@ class ZModem:
 
         # ZFIN to end session
         await self._transport.write(_build_hex_header(ZFIN, 0, 0, 0, 0))
-        try:
+        with contextlib.suppress(asyncio.TimeoutError, ProtocolError, TransferTimeout):
             await self._read_header_with_timeout()
-        except (asyncio.TimeoutError, ProtocolError, TransferTimeout):
-            pass  # best-effort
 
         progress.event = EventType.SESSION_END
         await fire(self._callback, progress)
@@ -285,10 +288,8 @@ class ZModem:
                 if mtime:
                     os.utime(dest, (mtime, mtime))
                 if mode:
-                    try:
+                    with contextlib.suppress(OSError):  # pragma: no cover
                         os.chmod(dest, stat.S_IMODE(mode))
-                    except OSError:  # pragma: no cover
-                        pass
 
                 progress.bytes_transferred = n
                 progress.event = EventType.FILE_END
@@ -348,9 +349,9 @@ class ZModem:
             next_data = stream.read(1)
             if next_data:
                 stream.seek(-1, 1)
-                term = ZCRCG   # more data coming
+                term = ZCRCG  # more data coming
             else:
-                term = ZCRCE   # end of file
+                term = ZCRCE  # end of file
 
             await self._write_data_subpacket(data, term)
             bytes_sent += len(data)
@@ -436,9 +437,7 @@ class ZModem:
                             break
                         if term == ZCRCW:
                             f0, f1, f2, f3 = _encode_offset(bytes_written)
-                            await self._transport.write(
-                                _build_hex_header(ZACK, f0, f1, f2, f3)
-                            )
+                            await self._transport.write(_build_hex_header(ZACK, f0, f1, f2, f3))
                             # Sender continues sending subpackets; stay in inner loop
                     continue
 
@@ -456,8 +455,8 @@ class ZModem:
         for _ in range(1024):
             try:
                 b = await self._transport.read_byte_with_timeout(self._timeout)
-            except asyncio.TimeoutError:
-                raise TransferTimeout("Timed out reading frame")
+            except asyncio.TimeoutError as err:
+                raise TransferTimeout("Timed out reading frame") from err
             if b == ZDLE:
                 break
         else:
@@ -476,8 +475,8 @@ class ZModem:
     async def _read_header_with_timeout(self) -> tuple[int, int, int, int, int]:
         try:
             return await asyncio.wait_for(self._read_header(), timeout=self._timeout)
-        except asyncio.TimeoutError:
-            raise TransferTimeout("Timed out waiting for ZModem header")
+        except asyncio.TimeoutError as err:
+            raise TransferTimeout("Timed out waiting for ZModem header") from err
 
     async def _read_hex_header(self) -> tuple[int, int, int, int, int]:
         # ZHEX: 10 hex chars (5 data bytes) + 4 hex chars (2-byte CRC-16) = 14 chars

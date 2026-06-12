@@ -1,7 +1,5 @@
 """Tests for the callbacks module."""
 
-import asyncio
-import pytest
 from yesterwind_xyzmodem.callbacks import EventType, TransferProgress, fire
 
 

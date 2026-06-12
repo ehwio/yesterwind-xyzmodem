@@ -18,10 +18,10 @@ from yesterwind_xyzmodem.exceptions import (
 )
 from yesterwind_xyzmodem.xmodem import XModem
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_block(block_num: int, data: bytes, use_crc: bool = True, size: int = 128) -> bytes:
     """Build a valid XModem block frame."""
@@ -44,8 +44,8 @@ def _pad(payload: bytes, size: int = 128) -> bytes:
 # Send tests
 # ---------------------------------------------------------------------------
 
-class TestXModemSend:
 
+class TestXModemSend:
     async def test_send_crc_mode_single_block(self, piped, event_log):
         """Sender completes a one-block transfer in CRC mode."""
         data = b"A" * 128
@@ -196,6 +196,7 @@ class TestXModemSend:
 
     async def test_send_block_size_invalid(self):
         from yesterwind_xyzmodem.transport import MemoryTransport
+
         t = MemoryTransport()
         with pytest.raises(ValueError):
             XModem(t, block_size=256)
@@ -260,7 +261,7 @@ class TestXModemSend:
         async def receiver():
             await piped.side_b.write(bytes([CRC_MODE]))
             await piped.side_b.read(3 + 128 + 2)  # first send, no response
-            await asyncio.sleep(0.08)             # let timeout fire
+            await asyncio.sleep(0.08)  # let timeout fire
             await piped.side_b.read(3 + 128 + 2)  # retry
             await piped.side_b.write(bytes([ACK]))
             await piped.side_b.read_byte()
@@ -274,8 +275,8 @@ class TestXModemSend:
 # Receive tests
 # ---------------------------------------------------------------------------
 
-class TestXModemReceive:
 
+class TestXModemReceive:
     async def test_receive_crc_mode_single_block(self, piped, event_log):
         """Receiver accepts one valid CRC block and writes stripped payload."""
         payload = b"M" * 100
@@ -372,10 +373,10 @@ class TestXModemReceive:
         async def sender():
             await piped.side_a.read_byte()  # 'C'
             await piped.side_a.write(_make_block(1, payload))
-            await piped.side_a.read_byte()   # ACK
+            await piped.side_a.read_byte()  # ACK
             # Retransmit block 1 (simulate lost ACK)
             await piped.side_a.write(_make_block(1, payload))
-            await piped.side_a.read_byte()   # ACK for duplicate
+            await piped.side_a.read_byte()  # ACK for duplicate
             await piped.side_a.write(bytes([EOT]))
             await piped.side_a.read_byte()
 
@@ -403,9 +404,9 @@ class TestXModemReceive:
         async def sender():
             await piped.side_a.read_byte()  # 'C'
             await piped.side_a.write(bytes([CAN]))  # single CAN = noise
-            await piped.side_a.read_byte()          # NAK
+            await piped.side_a.read_byte()  # NAK
             await piped.side_a.write(_make_block(1, payload))
-            await piped.side_a.read_byte()          # ACK
+            await piped.side_a.read_byte()  # ACK
             await piped.side_a.write(bytes([EOT]))
             await piped.side_a.read_byte()
 
@@ -449,7 +450,7 @@ class TestXModemReceive:
         async def sender():
             await piped.side_a.read_byte()
             await piped.side_a.write(bytes([0x55]))  # garbage
-            await piped.side_a.read_byte()           # NAK
+            await piped.side_a.read_byte()  # NAK
             await piped.side_a.write(_make_block(1, payload))
             await piped.side_a.read_byte()
             await piped.side_a.write(bytes([EOT]))
@@ -549,7 +550,6 @@ class TestXModemReceive:
 
 
 class TestXModemMissingBranches:
-
     async def test_send_handshake_ignores_unknown_byte(self, piped):
         """Sender ignores unknown byte during handshake and waits for C/NAK."""
         data = b"Z" * 128
@@ -595,6 +595,7 @@ class TestXModemMissingBranches:
             await piped.side_a.read_byte()  # NAK
             # Send correct block
             from yesterwind_xyzmodem.crc import crc16
+
             c = crc16(payload)
             await piped.side_a.write(bytes([SOH, 1, 0xFE]) + payload + bytes([c >> 8, c & 0xFF]))
             await piped.side_a.read_byte()  # ACK

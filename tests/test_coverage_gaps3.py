@@ -5,58 +5,44 @@ Third and final batch of coverage tests — closes the remaining 8 uncovered lin
 from __future__ import annotations
 
 import asyncio
-import io
 import os
 import time
 
 import pytest
 
-from yesterwind_xyzmodem.constants import ACK, CAN, CRC_MODE, EOT, NAK, SOH, STX, SUB
-from yesterwind_xyzmodem.crc import crc16, crc32
+from tests.test_zmodem import (
+    _read_hex_frame,
+    _write_subpacket,
+)
+from yesterwind_xyzmodem.constants import EOT, SOH, STX, SUB
+from yesterwind_xyzmodem.crc import crc16
 from yesterwind_xyzmodem.exceptions import (
-    ProtocolError,
-    TransferCancelled,
-    TransferFailed,
     TransferTimeout,
 )
 from yesterwind_xyzmodem.transport import MemoryTransport
-from yesterwind_xyzmodem.ymodem import YModem, _DATA_BLOCK_SIZE, _HEADER_BLOCK_SIZE
+from yesterwind_xyzmodem.ymodem import _DATA_BLOCK_SIZE, _HEADER_BLOCK_SIZE, YModem
 from yesterwind_xyzmodem.zmodem import (
-    ZABORT,
-    ZACK,
-    ZBIN,
-    ZBIN32,
     ZCRCE,
     ZCRCG,
-    ZCRCQ,
     ZCRCW,
     ZDATA,
     ZDLE,
     ZEOF,
-    ZFIN,
     ZFILE,
+    ZFIN,
     ZHEX,
-    ZRPOS,
     ZRINIT,
     ZRQINIT,
     ZModem,
     _build_bin32_header,
     _build_hex_header,
     _encode_offset,
-    _zdle_encode,
 )
-from tests.test_zmodem import (
-    _read_hex_frame,
-    _read_bin32_frame,
-    _read_subpacket,
-    _read_subpacket_with_term,
-    _write_subpacket,
-)
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_header_block(filename: str, size: int, mtime: int) -> bytes:
     meta = f"{filename}\x00{size} {mtime:o}"
@@ -84,6 +70,7 @@ def _empty_header() -> bytes:
 # ---------------------------------------------------------------------------
 # YModem: ymodem.py 426-428 — garbage header byte in data receive loop
 # ---------------------------------------------------------------------------
+
 
 async def test_ymodem_receive_data_garbage_header(piped, tmp_path):
     """426-428: non-SOH/STX/EOT/CAN data header byte → NAK → retry."""
@@ -115,6 +102,7 @@ async def test_ymodem_receive_data_garbage_header(piped, tmp_path):
 # ---------------------------------------------------------------------------
 # ZModem: 431->422, 439->413 — ZCRCG and unknown frame in _receive_file_data
 # ---------------------------------------------------------------------------
+
 
 async def test_zmodem_receive_zcrcg_subpacket(piped, tmp_path):
     """431->422: ZCRCG subpacket in _receive_file_data continues inner loop."""
@@ -175,6 +163,7 @@ async def test_zmodem_receive_unknown_ftype_in_data_phase(piped, tmp_path):
 # ZModem: 454 — TransferTimeout in _read_header scan
 # ---------------------------------------------------------------------------
 
+
 async def test_zmodem_header_scan_partial_timeout():
     """454: read_byte_with_timeout raises TimeoutError mid-scan → TransferTimeout."""
     # Feed 50 non-ZDLE bytes — scan loop runs out of buffer mid-way, not at 1024
@@ -188,13 +177,14 @@ async def test_zmodem_header_scan_partial_timeout():
 # ZModem: 499-500 — trailing \r\n timeout in _read_hex_header
 # ---------------------------------------------------------------------------
 
+
 async def test_zmodem_hex_header_no_trailing_crlf():
     """499-500: valid hex header with no trailing \\r\\n → timeout break → return ok."""
     frame_type = ZRINIT
     raw = bytes([frame_type, 0x23, 0, 0, 0])
     c = crc16(raw)
-    hex_data = raw.hex().encode("ascii")     # 10 chars
-    hex_crc = f"{c:04X}".encode("ascii")    # 4 chars
+    hex_data = raw.hex().encode("ascii")  # 10 chars
+    hex_crc = f"{c:04X}".encode("ascii")  # 4 chars
     # No trailing \r\n — causes timeout in trailing read loop
     frame = bytes([ZDLE, ZHEX]) + hex_data + hex_crc
     t = MemoryTransport(frame)
@@ -206,6 +196,7 @@ async def test_zmodem_hex_header_no_trailing_crlf():
 # ---------------------------------------------------------------------------
 # ZModem: 509-510 — ZDLE escape in _read_bin_header
 # ---------------------------------------------------------------------------
+
 
 async def test_zmodem_bin32_header_with_escaped_bytes():
     """509-510: ZBIN32 header where a payload byte requires ZDLE escaping."""

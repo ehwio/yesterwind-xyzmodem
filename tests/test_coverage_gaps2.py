@@ -10,39 +10,41 @@ from __future__ import annotations
 import asyncio
 import io
 import os
-import stat
 import time
 
 import pytest
 
-from yesterwind_xyzmodem.callbacks import EventType
+from tests.test_zmodem import (
+    _read_bin32_frame,
+    _read_hex_frame,
+    _read_subpacket,
+    _read_subpacket_with_term,
+    _write_subpacket,
+)
 from yesterwind_xyzmodem.constants import ACK, CAN, CRC_MODE, EOT, NAK, SOH, STX, SUB
 from yesterwind_xyzmodem.crc import crc16, crc32
 from yesterwind_xyzmodem.exceptions import (
     ProtocolError,
     TransferCancelled,
     TransferFailed,
-    TransferTimeout,
 )
 from yesterwind_xyzmodem.transport import MemoryTransport
-from yesterwind_xyzmodem.xmodem import XModem
-from yesterwind_xyzmodem.ymodem import YModem, _DATA_BLOCK_SIZE, _HEADER_BLOCK_SIZE
+from yesterwind_xyzmodem.ymodem import _DATA_BLOCK_SIZE, _HEADER_BLOCK_SIZE, YModem
 from yesterwind_xyzmodem.zmodem import (
     ZABORT,
     ZACK,
     ZBIN,
     ZBIN32,
     ZCRCE,
-    ZCRCG,
     ZCRCW,
     ZDATA,
     ZDLE,
     ZEOF,
-    ZFIN,
     ZFILE,
+    ZFIN,
     ZHEX,
-    ZRPOS,
     ZRINIT,
+    ZRPOS,
     ZRQINIT,
     ZModem,
     _build_bin32_header,
@@ -50,18 +52,11 @@ from yesterwind_xyzmodem.zmodem import (
     _encode_offset,
     _zdle_encode,
 )
-from tests.test_zmodem import (
-    _read_hex_frame,
-    _read_bin32_frame,
-    _read_subpacket,
-    _read_subpacket_with_term,
-    _write_subpacket,
-)
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_header_block(filename: str, size: int, mtime: int) -> bytes:
     meta = f"{filename}\x00{size} {mtime:o}"
@@ -98,8 +93,8 @@ def _zbin_header(frame_type: int, f0: int, f1: int, f2: int, f3: int) -> bytes:
 # YModem sender: retry loop paths
 # ---------------------------------------------------------------------------
 
-class TestYModemSenderLoops:
 
+class TestYModemSenderLoops:
     async def test_wait_for_handshake_junk_byte(self, piped):
         """201->193: junk byte in handshake loop causes retry."""
         file_data = b"A" * _DATA_BLOCK_SIZE
@@ -203,8 +198,8 @@ class TestYModemSenderLoops:
 # YModem receiver: block0 error paths
 # ---------------------------------------------------------------------------
 
-class TestYModemReceiverBlock0:
 
+class TestYModemReceiverBlock0:
     async def test_receive_block0_can(self, piped, tmp_path):
         """342: CAN received as block0 header byte raises TransferCancelled."""
         receiver_engine = YModem(piped.side_b, timeout=0.5, retry_limit=3)
@@ -325,8 +320,8 @@ class TestYModemReceiverBlock0:
 # YModem receiver: data block error paths
 # ---------------------------------------------------------------------------
 
-class TestYModemReceiverData:
 
+class TestYModemReceiverData:
     async def test_data_rest_timeout(self, piped, tmp_path):
         """435-438: timeout reading data block rest → NAK → retry."""
         file_data = b"I" * 128
@@ -421,7 +416,9 @@ class TestYModemReceiverData:
         async def sender():
             await piped.side_a.read_byte()  # C
             await piped.side_a.write(_make_header_block("l.bin", len(file_data), mtime))
-            await piped.side_a.read_byte()  # ACK (g_mode sender still sends block0 and waits for ACK)
+            await (
+                piped.side_a.read_byte()
+            )  # ACK (g_mode sender still sends block0 and waits for ACK)
             await piped.side_a.read_byte()  # C
             # In G mode, send data without waiting for ACKs
             await piped.side_a.write(_make_data_block(1, _pad1k(file_data)))
@@ -440,8 +437,8 @@ class TestYModemReceiverData:
 # ZModem sender: session-level paths
 # ---------------------------------------------------------------------------
 
-class TestZModemSenderPaths:
 
+class TestZModemSenderPaths:
     async def test_send_zfin_best_effort_timeout(self, piped):
         """223-224: ZFIN response times out → pass (best-effort)."""
         sender = ZModem(piped.side_a, timeout=0.05)
@@ -559,7 +556,7 @@ class TestZModemSenderPaths:
                 if term == ZCRCE:
                     break
             await _read_hex_frame(piped.side_b)  # ZEOF
-            await asyncio.sleep(0.15)            # cause timeout on ZRINIT wait
+            await asyncio.sleep(0.15)  # cause timeout on ZRINIT wait
             await piped.side_b.write(_build_hex_header(ZRINIT, 0x23, 0, 0, 0))
             await _read_hex_frame(piped.side_b)  # ZFIN
             await piped.side_b.write(_build_hex_header(ZFIN, 0, 0, 0, 0))
@@ -629,8 +626,8 @@ class TestZModemSenderPaths:
 # ZModem receiver: session-level paths
 # ---------------------------------------------------------------------------
 
-class TestZModemReceiverPaths:
 
+class TestZModemReceiverPaths:
     async def test_receive_mtime_zero(self, piped, tmp_path):
         """280->282: mtime == 0 → os.utime NOT called."""
         file_data = b"T" * 64
@@ -723,11 +720,12 @@ class TestZModemReceiverPaths:
 # ZModem: direct protocol-level unit tests (MemoryTransport)
 # ---------------------------------------------------------------------------
 
-class TestZModemProtocolUnit:
 
+class TestZModemProtocolUnit:
     async def test_read_zfile_data_no_null(self):
         """395: _read_zfile_data returns (data_as_str, 0, 0, 0) when no null byte."""
         from yesterwind_xyzmodem.zmodem import ZCRCW
+
         # Build a subpacket with no null byte
         data = b"justfilename"
         t = MemoryTransport()
