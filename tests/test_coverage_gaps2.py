@@ -502,7 +502,8 @@ class TestZModemSenderPaths:
             await piped.side_b.write(_build_hex_header(ZRINIT, 0x23, 0, 0, 0))
             await _read_bin32_frame(piped.side_b)  # ZFILE
             await _read_subpacket(piped.side_b)
-            await piped.side_b.write(_build_hex_header(ZRINIT, 0x23, 0, 0, 0))  # buffered extra ZRINIT
+            # buffered extra ZRINIT — should be drained before ZRPOS
+            await piped.side_b.write(_build_hex_header(ZRINIT, 0x23, 0, 0, 0))
             await piped.side_b.write(_build_hex_header(ZRPOS, 0, 0, 0, 0))  # correct
             await _read_bin32_frame(piped.side_b)
             while True:
