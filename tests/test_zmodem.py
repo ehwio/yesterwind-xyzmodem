@@ -63,7 +63,7 @@ class TestFramingHelpers:
 
     def test_build_bin32_header_structure(self):
         frame = _build_bin32_header(ZDATA, 0, 0, 0, 0)
-        assert frame[:2] == bytes([ZDLE, ZBIN32])
+        assert frame[:3] == bytes([0x2A, ZDLE, ZBIN32])
 
     def test_encode_offset_roundtrip(self):
         for offset in (0, 1, 1024, 0xDEADBEEF & 0xFFFFFFFF):
@@ -90,7 +90,7 @@ class TestZModemSend:
             # Send ZRINIT
             await piped.side_b.write(_build_hex_header(ZRINIT, 0x23, 0, 0, 0))
             # Receive ZFILE header
-            frame = await _read_hex_frame(piped.side_b)
+            frame = await _read_bin32_frame(piped.side_b)
             assert frame[0] == ZFILE
             # Read and discard ZFILE data subpacket
             await _read_subpacket(piped.side_b)
@@ -135,7 +135,7 @@ class TestZModemSend:
             frame = await _read_hex_frame(piped.side_b)
             assert frame[0] == ZRQINIT
             await piped.side_b.write(_build_hex_header(ZRINIT, 0x23, 0, 0, 0))
-            frame = await _read_hex_frame(piped.side_b)
+            frame = await _read_bin32_frame(piped.side_b)
             assert frame[0] == ZFILE
             await _read_subpacket(piped.side_b)
             # Request resume from offset 1024
@@ -171,7 +171,7 @@ class TestZModemSend:
         async def receiver():
             await _read_hex_frame(piped.side_b)  # ZRQINIT
             await piped.side_b.write(_build_hex_header(ZRINIT, 0x23, 0, 0, 0))
-            await _read_hex_frame(piped.side_b)  # ZFILE
+            await _read_bin32_frame(piped.side_b)  # ZFILE
             await _read_subpacket(piped.side_b)
             await piped.side_b.write(_build_hex_header(ZABORT, 0, 0, 0, 0))
 

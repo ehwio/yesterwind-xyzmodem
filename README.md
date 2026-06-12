@@ -69,12 +69,33 @@ zmodem = ZModem(transport, callback=on_progress)
 Equivalent to `rz --tcp-client`, works against `sz --tcp-server`:
 
 ```bash
-# On the sending machine:
+# On the sending machine (using our sz demo):
+uv run demos/sz.py myfile.bin
+# Prints the port, e.g.: Listening on 0.0.0.0:12345
+
+# Or using the reference implementation:
 sz --tcp-server myfile.bin
-# sz prints: connect with lrz --tcp-client "host:PORT"
 
 # On the receiving machine:
 uv run demos/rz.py <host> <PORT> [-d download_dir]
+```
+
+### `sz` — ZModem TCP server (send files to any `rz` client)
+
+Sends one or more files to any connecting ZModem receiver.  Mirrors
+`sz --tcp-server`.  The OS assigns a free port automatically unless
+you specify one with `--port`.
+
+```bash
+# Single-shot: accept one client, send file, exit
+uv run demos/sz.py myfile.bin
+
+# Serve forever: keep listening, handle clients in parallel
+uv run demos/sz.py --serve-forever -p 12345 file1.bin file2.bin
+
+# Connect with the reference rz or our own client:
+rz --tcp-client <host>:12345
+uv run demos/rz.py <host> 12345
 ```
 
 ### `bbs` — telnet BBS client with auto ZModem receive

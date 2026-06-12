@@ -447,7 +447,7 @@ class TestZModemSenderPaths:
         async def receiver():
             await _read_hex_frame(piped.side_b)
             await piped.side_b.write(_build_hex_header(ZRINIT, 0x23, 0, 0, 0))
-            await _read_hex_frame(piped.side_b)  # ZFILE
+            await _read_bin32_frame(piped.side_b)  # ZFILE
             await _read_subpacket(piped.side_b)
             await piped.side_b.write(_build_hex_header(ZRPOS, 0, 0, 0, 0))
             await _read_bin32_frame(piped.side_b)  # ZDATA
@@ -473,7 +473,7 @@ class TestZModemSenderPaths:
         async def receiver():
             await _read_hex_frame(piped.side_b)
             await piped.side_b.write(_build_hex_header(ZRINIT, 0x23, 0, 0, 0))
-            await _read_hex_frame(piped.side_b)  # ZFILE
+            await _read_bin32_frame(piped.side_b)  # ZFILE
             await _read_subpacket(piped.side_b)
             await piped.side_b.write(_build_hex_header(ZRPOS, 0, 0, 0, 0))
             await _read_bin32_frame(piped.side_b)  # ZDATA
@@ -493,16 +493,17 @@ class TestZModemSenderPaths:
         assert total[0] == len(file_data)
 
     async def test_send_zrpos_wait_unexpected_then_ok(self, piped):
-        """326->322: unexpected frame (not ZRPOS/ZSKIP) → loop → ZRPOS."""
+        """326->322: buffered ZRINIT drained, then ZRPOS accepted."""
         file_data = b"O" * 64
         sender = ZModem(piped.side_a, timeout=1.0)
 
         async def receiver():
             await _read_hex_frame(piped.side_b)
             await piped.side_b.write(_build_hex_header(ZRINIT, 0x23, 0, 0, 0))
-            await _read_hex_frame(piped.side_b)  # ZFILE
+            await _read_bin32_frame(piped.side_b)  # ZFILE
             await _read_subpacket(piped.side_b)
-            await piped.side_b.write(_build_hex_header(ZACK, 0, 0, 0, 0))  # unexpected
+            # buffered extra ZRINIT — should be drained before ZRPOS
+            await piped.side_b.write(_build_hex_header(ZRINIT, 0x23, 0, 0, 0))
             await piped.side_b.write(_build_hex_header(ZRPOS, 0, 0, 0, 0))  # correct
             await _read_bin32_frame(piped.side_b)
             while True:
@@ -528,7 +529,7 @@ class TestZModemSenderPaths:
         async def receiver():
             await _read_hex_frame(piped.side_b)
             await piped.side_b.write(_build_hex_header(ZRINIT, 0x23, 0, 0, 0))
-            await _read_hex_frame(piped.side_b)  # ZFILE
+            await _read_bin32_frame(piped.side_b)  # ZFILE
             await _read_subpacket(piped.side_b)
             for _ in range(3):  # more than retry_limit
                 await piped.side_b.write(_build_hex_header(ZACK, 0, 0, 0, 0))
@@ -547,7 +548,7 @@ class TestZModemSenderPaths:
         async def receiver():
             await _read_hex_frame(piped.side_b)
             await piped.side_b.write(_build_hex_header(ZRINIT, 0x23, 0, 0, 0))
-            await _read_hex_frame(piped.side_b)  # ZFILE
+            await _read_bin32_frame(piped.side_b)  # ZFILE
             await _read_subpacket(piped.side_b)
             await piped.side_b.write(_build_hex_header(ZRPOS, 0, 0, 0, 0))
             await _read_bin32_frame(piped.side_b)
@@ -575,7 +576,7 @@ class TestZModemSenderPaths:
         async def receiver():
             await _read_hex_frame(piped.side_b)
             await piped.side_b.write(_build_hex_header(ZRINIT, 0x23, 0, 0, 0))
-            await _read_hex_frame(piped.side_b)  # ZFILE
+            await _read_bin32_frame(piped.side_b)  # ZFILE
             await _read_subpacket(piped.side_b)
             await piped.side_b.write(_build_hex_header(ZRPOS, 0, 0, 0, 0))
             await _read_bin32_frame(piped.side_b)
@@ -603,7 +604,7 @@ class TestZModemSenderPaths:
         async def receiver():
             await _read_hex_frame(piped.side_b)
             await piped.side_b.write(_build_hex_header(ZRINIT, 0x23, 0, 0, 0))
-            await _read_hex_frame(piped.side_b)  # ZFILE
+            await _read_bin32_frame(piped.side_b)  # ZFILE
             await _read_subpacket(piped.side_b)
             await piped.side_b.write(_build_hex_header(ZRPOS, 0, 0, 0, 0))
             await _read_bin32_frame(piped.side_b)

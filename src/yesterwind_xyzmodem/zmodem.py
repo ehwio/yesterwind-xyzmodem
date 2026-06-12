@@ -132,7 +132,7 @@ def _build_bin32_header(frame_type: int, f0: int, f1: int, f2: int, f3: int) -> 
     encoded = _zdle_encode(
         payload + bytes([c & 0xFF, (c >> 8) & 0xFF, (c >> 16) & 0xFF, (c >> 24) & 0xFF])
     )
-    return bytes([ZDLE, ZBIN32]) + encoded
+    return bytes([0x2A, ZDLE, ZBIN32]) + encoded
 
 
 def _encode_offset(offset: int) -> tuple[int, int, int, int]:
@@ -320,17 +320,33 @@ class ZModem:
         size: int,
         progress: TransferProgress,
     ) -> int:
-        # ZFILE header
-        await self._transport.write(_build_hex_header(ZFILE, 0, 0, 0, 0))
-        # File info subpacket
-        info = f"{os.path.basename(filename)}\x00{size} {int(time.time()):o} 0 0 1 {size}"
-        await self._write_data_subpacket(info.encode("ascii"), ZCRCW)
+        info_bytes = (
+            f"{os.path.basename(filename)}\x00{size} {int(time.time()):o} 0 0 1 {size}\x00"
+        ).encode("ascii")
 
-        # Wait for ZRPOS (may include resume offset)
-        for _ in range(self._retry_limit):
-            frame = await self._read_header_with_timeout()
+        async def _send_zfile() -> None:
+            await self._transport.write(_build_bin32_header(ZFILE, 0, 0, 0, 0))
+            await self._write_data_subpacket(info_bytes, ZCRCW)
+
+        await _send_zfile()
+
+        # Wait for ZRPOS.  The reference rz sends ZRINIT twice on connect: once
+        # proactively and once in response to ZRQINIT.  The second ZRINIT may be
+        # buffered ahead of ZRPOS when we read here.  Just drain it and keep
+        # waiting — do NOT re-send ZFILE, which would confuse rz since it has
+        # already advanced past the ZFILE-handling state.  If we time out without
+        # ZRPOS, re-send ZFILE (genuine retry / receiver reset).
+        for attempt in range(self._retry_limit):
+            try:
+                frame = await self._read_header_with_timeout()
+            except TransferTimeout:
+                if attempt == 0:
+                    await _send_zfile()
+                continue
             if frame[0] == ZRPOS:
                 break
+            if frame[0] == ZRINIT:
+                continue  # drain buffered ZRINIT; ZRPOS follows
             if frame[0] in (ZSKIP, ZABORT):
                 raise TransferCancelled("Remote skipped or aborted")
         else:
