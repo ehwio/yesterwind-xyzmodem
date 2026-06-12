@@ -228,8 +228,10 @@ class ZModem:
 
         # ZFIN to end session
         await self._transport.write(_build_hex_header(ZFIN, 0, 0, 0, 0))
-        with contextlib.suppress(asyncio.TimeoutError, ProtocolError, TransferTimeout):
+        try:
             await self._read_header_with_timeout()
+        except (asyncio.TimeoutError, ProtocolError, TransferTimeout):
+            pass  # best-effort
 
         progress.event = EventType.SESSION_END
         await fire(self._callback, progress)

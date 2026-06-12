@@ -68,3 +68,4 @@ target-version = "py39"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["SIM105"]  # contextlib.suppress breaks branch coverage on Python 3.9

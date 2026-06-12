@@ -13,7 +13,6 @@ writes this metadata automatically.
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import io
 import os
 import time
@@ -322,8 +321,10 @@ class YModem:
         raise TransferFailed("Expected 'C', got nothing")
 
     async def _wait_for_ack_or_ignore(self) -> None:
-        with contextlib.suppress(asyncio.TimeoutError):
+        try:
             await self._transport.read_byte_with_timeout(self._timeout)
+        except asyncio.TimeoutError:
+            pass
 
     # ------------------------------------------------------------------
     # Receiver helpers
@@ -381,11 +382,15 @@ class YModem:
             if meta_bytes:
                 parts = meta_bytes.decode("ascii", errors="replace").split()
                 if parts:
-                    with contextlib.suppress(ValueError):
+                    try:
                         size = int(parts[0])
+                    except ValueError:
+                        pass
                 if len(parts) > 1:
-                    with contextlib.suppress(ValueError):
+                    try:
                         mtime = int(parts[1], 8)
+                    except ValueError:
+                        pass
 
             return (filename, size, mtime)
 
