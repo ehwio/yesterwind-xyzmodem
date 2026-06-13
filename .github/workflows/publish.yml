@@ -1,8 +1,9 @@
 name: Publish
 
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
   pull_request:
     types: [closed]
 
@@ -10,8 +11,8 @@ jobs:
   build:
     name: Build distribution
     runs-on: ubuntu-latest
-    # Build on release publishes AND on merged PRs
-    if: github.event_name == 'release' || github.event.pull_request.merged == true
+    # Build on version tags AND on merged PRs
+    if: github.event_name == 'push' || github.event.pull_request.merged == true
 
     steps:
       - uses: actions/checkout@v4
@@ -36,7 +37,7 @@ jobs:
     name: Publish → TestPyPI
     needs: build
     runs-on: ubuntu-latest
-    # Publish to TestPyPI for merged PRs (not releases)
+    # Publish to TestPyPI for merged PRs only
     if: github.event_name == 'pull_request' && github.event.pull_request.merged == true
     environment:
       name: testpypi
@@ -60,8 +61,8 @@ jobs:
     name: Publish → PyPI
     needs: build
     runs-on: ubuntu-latest
-    # Publish to real PyPI only on release events
-    if: github.event_name == 'release'
+    # Publish to real PyPI on version tag pushes
+    if: github.event_name == 'push'
     environment:
       name: pypi
       url: https://pypi.org/p/yesterwind-xyzmodem
