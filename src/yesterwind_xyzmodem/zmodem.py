@@ -347,8 +347,10 @@ class ZModem:
                 break
             if frame[0] == ZRINIT:
                 continue  # drain buffered ZRINIT; ZRPOS follows
-            if frame[0] in (ZSKIP, ZABORT):
-                raise TransferCancelled("Remote skipped or aborted")
+            if frame[0] == ZSKIP:
+                return 0  # receiver already has the file; not an error
+            if frame[0] == ZABORT:
+                raise TransferCancelled("Remote aborted")
         else:
             raise TransferFailed("No ZRPOS received")
 

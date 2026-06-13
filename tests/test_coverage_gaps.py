@@ -563,8 +563,12 @@ class TestZModemCoverage:
                 receiver(),
             )
 
-    async def test_send_skip_raises_cancel(self, piped):
-        """lines 345-346: ZSKIP from receiver raises TransferCancelled."""
+    async def test_send_skip_is_success(self, piped):
+        """ZSKIP from receiver is a clean skip (0 bytes), not an error.
+
+        The sender must complete the ZFIN exchange so the receiver's session
+        ends cleanly (fixes double-free in lrzsz on re-connect, issue #1).
+        """
         from yesterwind_xyzmodem.zmodem import ZSKIP
 
         file_data = b"T" * 64
@@ -577,12 +581,16 @@ class TestZModemCoverage:
             assert frame[0] == ZFILE
             await _read_subpacket(piped.side_b)
             await piped.side_b.write(_build_hex_header(ZSKIP, 0, 0, 0, 0))
+            # Sender must still send ZFIN
+            frame = await _read_hex_frame(piped.side_b)
+            assert frame[0] == ZFIN
+            await piped.side_b.write(_build_hex_header(ZFIN, 0, 0, 0, 0))
 
-        with pytest.raises(TransferCancelled):
-            await asyncio.gather(
-                sender.send([("t.bin", io.BytesIO(file_data), len(file_data))]),
-                receiver(),
-            )
+        total, _ = await asyncio.gather(
+            sender.send([("t.bin", io.BytesIO(file_data), len(file_data))]),
+            receiver(),
+        )
+        assert total == 0
 
     async def test_receive_cancel_during_data(self, piped, tmp_path):
         """lines 439-440: ZABORT during data transfer raises TransferCancelled."""
