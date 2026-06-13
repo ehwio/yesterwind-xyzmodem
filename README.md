@@ -4,6 +4,7 @@
 [![PyPI](https://img.shields.io/pypi/v/yesterwind-xyzmodem)](https://pypi.org/project/yesterwind-xyzmodem/)
 [![Python](https://img.shields.io/pypi/pyversions/yesterwind-xyzmodem)](https://pypi.org/project/yesterwind-xyzmodem/)
 [![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)](https://github.com/ehwio/yesterwind-xyzmodem/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 Pure-Python async implementation of the X-, Y-, and Z-Modem file transfer
 protocols.  No subprocesses, no external tools — everything is implemented
@@ -13,6 +14,12 @@ in Python 3.9+.
 
 ```bash
 pip install yesterwind-xyzmodem
+```
+
+To also get the `yw-send`, `yw-receive`, and `yw-bbs` command-line tools:
+
+```bash
+pip install 'yesterwind-xyzmodem[demos]'
 ```
 
 ## Usage
@@ -32,7 +39,7 @@ received_paths = await zmodem.receive("./downloads")
 
 ```python
 zmodem = ZModem(transport)
-await zmodem.send(["file1.bin", "file2.txt"])
+await zmodem.send([("file1.bin", open("file1.bin", "rb"), size)])
 ```
 
 ### XModem / YModem
@@ -46,7 +53,7 @@ await xmodem.send("file.bin")
 await xmodem.receive("file.bin")
 
 ymodem = YModem(transport)
-await ymodem.send(["a.bin", "b.txt"])
+await ymodem.send([("a.bin", stream_a, size_a), ("b.txt", stream_b, size_b)])
 paths = await ymodem.receive("./downloads")
 ```
 
@@ -62,59 +69,85 @@ def on_progress(p):
 zmodem = ZModem(transport, callback=on_progress)
 ```
 
-## Demos
+## Demo tools
 
-### `rz` — download via ZModem over TCP
-
-Equivalent to `rz --tcp-client`, works against `sz --tcp-server`:
+Install the `[demos]` extra to get three command-line tools:
 
 ```bash
-# On the sending machine (using our sz demo):
-uv run demos/sz.py myfile.bin
-# Prints the port, e.g.: Listening on 0.0.0.0:12345
-
-# Or using the reference implementation:
-sz --tcp-server myfile.bin
-
-# On the receiving machine:
-uv run demos/rz.py <host> <PORT> [-d download_dir]
+pip install 'yesterwind-xyzmodem[demos]'
 ```
 
-### `sz` — ZModem TCP server (send files to any `rz` client)
+| Command | Description |
+|---|---|
+| `yw-send` | ZModem TCP server — send files to any `rz` client |
+| `yw-receive` | ZModem TCP client — receive files from any `sz` server |
+| `yw-bbs` | Telnet BBS client with automatic ZModem receive |
 
-Sends one or more files to any connecting ZModem receiver.  Mirrors
-`sz --tcp-server`.  The OS assigns a free port automatically unless
-you specify one with `--port`.
+If you run a `yw-*` command without the `[demos]` extra installed, you'll get
+a clear message explaining what to install rather than a bare traceback.
+
+### `yw-send` — ZModem TCP server
+
+Equivalent to `sz --tcp-server`. The OS assigns a free port unless you
+specify one with `--port`.
 
 ```bash
 # Single-shot: accept one client, send file, exit
-uv run demos/sz.py myfile.bin
+yw-send myfile.bin
 
-# Serve forever: keep listening, handle clients in parallel
-uv run demos/sz.py --serve-forever -p 12345 file1.bin file2.bin
+# Serve forever: keep listening, handle multiple clients in parallel
+yw-send --serve-forever -p 12345 file1.bin file2.bin
 
 # Connect with the reference rz or our own client:
 rz --tcp-client <host>:12345
-uv run demos/rz.py <host> 12345
+yw-receive <host> 12345
 ```
 
-### `bbs` — telnet BBS client with auto ZModem receive
+### `yw-receive` — ZModem TCP client
 
-Connects to any telnet BBS.  ZModem transfers are detected automatically
-and a retro progress panel appears, just like PCPlus or XTalk4:
+Equivalent to `rz --tcp-client`. Connects to a `yw-send` or
+`sz --tcp-server` instance and downloads files with a progress panel.
 
 ```bash
-uv run demos/bbs.py bbs.fozztexx.com
-uv run demos/bbs.py bbs.fozztexx.com 23 -d ~/Downloads/bbs
+# yw-send prints the port when it starts listening
+yw-send myfile.bin
+# → Listening on 0.0.0.0:54321
+
+yw-receive <host> 54321
+yw-receive <host> 54321 -d ~/Downloads
+```
+
+### `yw-bbs` — telnet BBS client with auto ZModem receive
+
+Connects to any telnet BBS. ZModem transfers initiated by the BBS are
+detected automatically and a retro progress panel appears, just like
+PCPlus or XTalk4 — no user action required.
+
+```bash
+yw-bbs bbs.fozztexx.com
+yw-bbs bbs.fozztexx.com 23 -d ~/Downloads/bbs
 ```
 
 Press `Ctrl+]` to disconnect.
 
+### Running demos from a repo clone
+
+If you're working from a clone rather than a pip install, use `uv run`:
+
+```bash
+uv run demos/sz.py myfile.bin
+uv run demos/rz.py <host> <port>
+uv run demos/bbs.py bbs.fozztexx.com
+```
+
 ## Development
 
 ```bash
-uv sync
+git clone https://github.com/ehwio/yesterwind-xyzmodem
+cd yesterwind-xyzmodem
+uv sync --extra dev
 uv run pytest
 ```
 
-Tests require 100% branch coverage.
+Tests require 100% branch coverage. See [CONTRIBUTING.md](CONTRIBUTING.md) for
+the full workflow.
