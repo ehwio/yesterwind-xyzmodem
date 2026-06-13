@@ -54,6 +54,7 @@ addopts = "--cov=yesterwind_xyzmodem --cov-report=term-missing --cov-branch --co
 [tool.coverage.run]
 source = ["yesterwind_xyzmodem"]
 branch = true
+omit = ["*/yesterwind_xyzmodem/demos/*"]
 
 [tool.coverage.report]
 exclude_lines = [
