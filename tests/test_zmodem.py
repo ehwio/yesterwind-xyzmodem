@@ -29,6 +29,7 @@ from yesterwind_xyzmodem.zmodem import (
     ZRINIT,
     ZRPOS,
     ZRQINIT,
+    ZSKIP,
     ZModem,
     _build_bin32_header,
     _build_hex_header,
@@ -180,6 +181,74 @@ class TestZModemSend:
                 sender.send([("f.bin", io.BytesIO(b"x" * 512), 512)]),
                 receiver(),
             )
+
+    async def test_send_zskip_is_not_an_error(self, piped):
+        """ZSKIP (receiver already has the file) counts as 0 bytes, not an error.
+
+        The sender must still send ZFIN so the receiver's session ends cleanly.
+        Regression for: rz double-free when re-fetching an existing file.
+        """
+        sender = ZModem(piped.side_a)
+
+        async def receiver():
+            await _read_hex_frame(piped.side_b)  # ZRQINIT
+            await piped.side_b.write(_build_hex_header(ZRINIT, 0x23, 0, 0, 0))
+            await _read_bin32_frame(piped.side_b)  # ZFILE
+            await _read_subpacket(piped.side_b)
+            # Skip — file already exists on the receiver
+            await piped.side_b.write(_build_hex_header(ZSKIP, 0, 0, 0, 0))
+            # Sender must still complete the session with ZFIN
+            frame = await _read_hex_frame(piped.side_b)
+            assert frame[0] == ZFIN
+            await piped.side_b.write(_build_hex_header(ZFIN, 0, 0, 0, 0))
+
+        total, _ = await asyncio.gather(
+            sender.send([("existing.bin", io.BytesIO(b"x" * 512), 512)]),
+            receiver(),
+        )
+        assert total == 0  # skipped file contributes 0 bytes
+
+    async def test_send_zskip_then_send_next_file(self, piped):
+        """ZSKIP on the first file of a batch does not prevent the second from sending."""
+        file_data = b"Y" * 64
+        sender = ZModem(piped.side_a)
+
+        async def receiver():
+            await _read_hex_frame(piped.side_b)  # ZRQINIT
+            await piped.side_b.write(_build_hex_header(ZRINIT, 0x23, 0, 0, 0))
+
+            # File 1: skip it
+            await _read_bin32_frame(piped.side_b)  # ZFILE
+            await _read_subpacket(piped.side_b)
+            await piped.side_b.write(_build_hex_header(ZSKIP, 0, 0, 0, 0))
+
+            # File 2: receive normally
+            await _read_bin32_frame(piped.side_b)  # ZFILE
+            await _read_subpacket(piped.side_b)
+            await piped.side_b.write(_build_hex_header(ZRPOS, 0, 0, 0, 0))
+            await _read_bin32_frame(piped.side_b)  # ZDATA
+            while True:
+                _, term = await _read_subpacket_with_term(piped.side_b)
+                if term == ZCRCE:
+                    break
+            await _read_hex_frame(piped.side_b)  # ZEOF
+            await piped.side_b.write(_build_hex_header(ZRINIT, 0x23, 0, 0, 0))
+
+            # ZFIN
+            frame = await _read_hex_frame(piped.side_b)
+            assert frame[0] == ZFIN
+            await piped.side_b.write(_build_hex_header(ZFIN, 0, 0, 0, 0))
+
+        total, _ = await asyncio.gather(
+            sender.send(
+                [
+                    ("skip.bin", io.BytesIO(b"skip"), 4),
+                    ("send.bin", io.BytesIO(file_data), len(file_data)),
+                ]
+            ),
+            receiver(),
+        )
+        assert total == len(file_data)  # only the second file counted
 
     async def test_send_no_zrinit_raises(self, piped):
         """Sender raises ProtocolError if ZRQINIT is not answered with ZRINIT."""
