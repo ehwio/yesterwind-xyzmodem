@@ -240,10 +240,12 @@ class TestZModemSend:
             await piped.side_b.write(_build_hex_header(ZFIN, 0, 0, 0, 0))
 
         total, _ = await asyncio.gather(
-            sender.send([
-                ("skip.bin", io.BytesIO(b"skip"), 4),
-                ("send.bin", io.BytesIO(file_data), len(file_data)),
-            ]),
+            sender.send(
+                [
+                    ("skip.bin", io.BytesIO(b"skip"), 4),
+                    ("send.bin", io.BytesIO(file_data), len(file_data)),
+                ]
+            ),
             receiver(),
         )
         assert total == len(file_data)  # only the second file counted
