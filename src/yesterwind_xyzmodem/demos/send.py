@@ -96,8 +96,7 @@ class _Panel:
         grid.add_row(
             "File:",
             Text(
-                f"{self.filename or '—'}  "
-                f"[dim]({self._file_index + 1}/{self._file_count})[/dim]",
+                f"{self.filename or '—'}  [dim]({self._file_index + 1}/{self._file_count})[/dim]",
                 style="bold white",
             ),
         )
@@ -241,12 +240,8 @@ async def serve(
 ) -> int:
     pending: set[asyncio.Task] = set()
 
-    def _client_factory(
-        reader: asyncio.StreamReader, writer: asyncio.StreamWriter
-    ) -> None:
-        task = asyncio.get_running_loop().create_task(
-            _handle_client(reader, writer, files)
-        )
+    def _client_factory(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        task = asyncio.get_running_loop().create_task(_handle_client(reader, writer, files))
         pending.add(task)
         task.add_done_callback(pending.discard)
         if not serve_forever:

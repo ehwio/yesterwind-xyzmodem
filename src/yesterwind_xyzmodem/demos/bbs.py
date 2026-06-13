@@ -140,12 +140,19 @@ class _TelnetTransport(Transport):
 
 
 def _naws_packet(cols: int, rows: int) -> bytes:
-    return bytes([
-        IAC, SB, OPT_NAWS,
-        (cols >> 8) & 0xFF, cols & 0xFF,
-        (rows >> 8) & 0xFF, rows & 0xFF,
-        IAC, SE,
-    ])
+    return bytes(
+        [
+            IAC,
+            SB,
+            OPT_NAWS,
+            (cols >> 8) & 0xFF,
+            cols & 0xFF,
+            (rows >> 8) & 0xFF,
+            rows & 0xFF,
+            IAC,
+            SE,
+        ]
+    )
 
 
 class _Negotiator:
@@ -296,9 +303,7 @@ class BBSClient:
             f"[cyan]{self._host}[/cyan]:[cyan]{self._port}[/cyan]…[/dim]"
         )
         try:
-            self._reader, self._writer = await asyncio.open_connection(
-                self._host, self._port
-            )
+            self._reader, self._writer = await asyncio.open_connection(self._host, self._port)
         except OSError as exc:
             console.print(f"[red]Connection failed: {exc}[/red]")
             return
@@ -427,7 +432,7 @@ class BBSClient:
                         display.clear()
                     magic_buf.clear()
 
-                    tail = bytes(chunk[i + 1:])
+                    tail = bytes(chunk[i + 1 :])
                     await self._do_zmodem_receive(tail)
 
                     i = len(chunk)
