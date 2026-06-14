@@ -57,6 +57,10 @@ class TestFramingHelpers:
             assert enc[0] == ZDLE
             assert enc[1] == b ^ 0x40
 
+    def test_zdle_encode_escapes_telnet_iac(self):
+        enc = _zdle_encode(bytes([0xFF]))
+        assert enc == bytes([ZDLE, 0xFF ^ 0x40])
+
     def test_build_hex_header_structure(self):
         frame = _build_hex_header(ZRINIT, 0x23, 0, 0, 0)
         assert frame[:4] == b"**\x18B"
@@ -91,14 +95,14 @@ class TestZModemSend:
             # Send ZRINIT
             await piped.side_b.write(_build_hex_header(ZRINIT, 0x23, 0, 0, 0))
             # Receive ZFILE header
-            frame = await _read_bin32_frame(piped.side_b)
+            frame = await _read_hex_frame(piped.side_b)
             assert frame[0] == ZFILE
             # Read and discard ZFILE data subpacket
             await _read_subpacket(piped.side_b)
             # Send ZRPOS offset=0
             await piped.side_b.write(_build_hex_header(ZRPOS, 0, 0, 0, 0))
             # Receive ZDATA header
-            frame = await _read_bin32_frame(piped.side_b)
+            frame = await _read_hex_frame(piped.side_b)
             assert frame[0] == ZDATA
             # Read all data subpackets until ZCRCE
             received = b""
@@ -136,13 +140,13 @@ class TestZModemSend:
             frame = await _read_hex_frame(piped.side_b)
             assert frame[0] == ZRQINIT
             await piped.side_b.write(_build_hex_header(ZRINIT, 0x23, 0, 0, 0))
-            frame = await _read_bin32_frame(piped.side_b)
+            frame = await _read_hex_frame(piped.side_b)
             assert frame[0] == ZFILE
             await _read_subpacket(piped.side_b)
             # Request resume from offset 1024
             f0, f1, f2, f3 = _encode_offset(resume_at)
             await piped.side_b.write(_build_hex_header(ZRPOS, f0, f1, f2, f3))
-            frame = await _read_bin32_frame(piped.side_b)
+            frame = await _read_hex_frame(piped.side_b)
             assert frame[0] == ZDATA
             # Verify offset in header
             offset = frame[1] | (frame[2] << 8) | (frame[3] << 16) | (frame[4] << 24)
@@ -172,7 +176,7 @@ class TestZModemSend:
         async def receiver():
             await _read_hex_frame(piped.side_b)  # ZRQINIT
             await piped.side_b.write(_build_hex_header(ZRINIT, 0x23, 0, 0, 0))
-            await _read_bin32_frame(piped.side_b)  # ZFILE
+            await _read_hex_frame(piped.side_b)  # ZFILE
             await _read_subpacket(piped.side_b)
             await piped.side_b.write(_build_hex_header(ZABORT, 0, 0, 0, 0))
 
@@ -193,7 +197,7 @@ class TestZModemSend:
         async def receiver():
             await _read_hex_frame(piped.side_b)  # ZRQINIT
             await piped.side_b.write(_build_hex_header(ZRINIT, 0x23, 0, 0, 0))
-            await _read_bin32_frame(piped.side_b)  # ZFILE
+            await _read_hex_frame(piped.side_b)  # ZFILE
             await _read_subpacket(piped.side_b)
             # Skip — file already exists on the receiver
             await piped.side_b.write(_build_hex_header(ZSKIP, 0, 0, 0, 0))
@@ -218,15 +222,15 @@ class TestZModemSend:
             await piped.side_b.write(_build_hex_header(ZRINIT, 0x23, 0, 0, 0))
 
             # File 1: skip it
-            await _read_bin32_frame(piped.side_b)  # ZFILE
+            await _read_hex_frame(piped.side_b)  # ZFILE
             await _read_subpacket(piped.side_b)
             await piped.side_b.write(_build_hex_header(ZSKIP, 0, 0, 0, 0))
 
             # File 2: receive normally
-            await _read_bin32_frame(piped.side_b)  # ZFILE
+            await _read_hex_frame(piped.side_b)  # ZFILE
             await _read_subpacket(piped.side_b)
             await piped.side_b.write(_build_hex_header(ZRPOS, 0, 0, 0, 0))
-            await _read_bin32_frame(piped.side_b)  # ZDATA
+            await _read_hex_frame(piped.side_b)  # ZDATA
             while True:
                 _, term = await _read_subpacket_with_term(piped.side_b)
                 if term == ZCRCE:

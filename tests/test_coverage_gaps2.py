@@ -15,7 +15,6 @@ import time
 import pytest
 
 from tests.test_zmodem import (
-    _read_bin32_frame,
     _read_hex_frame,
     _read_subpacket,
     _read_subpacket_with_term,
@@ -447,10 +446,10 @@ class TestZModemSenderPaths:
         async def receiver():
             await _read_hex_frame(piped.side_b)
             await piped.side_b.write(_build_hex_header(ZRINIT, 0x23, 0, 0, 0))
-            await _read_bin32_frame(piped.side_b)  # ZFILE
+            await _read_hex_frame(piped.side_b)  # ZFILE
             await _read_subpacket(piped.side_b)
             await piped.side_b.write(_build_hex_header(ZRPOS, 0, 0, 0, 0))
-            await _read_bin32_frame(piped.side_b)  # ZDATA
+            await _read_hex_frame(piped.side_b)  # ZDATA
             while True:
                 _, term = await _read_subpacket_with_term(piped.side_b)
                 if term == ZCRCE:
@@ -473,10 +472,10 @@ class TestZModemSenderPaths:
         async def receiver():
             await _read_hex_frame(piped.side_b)
             await piped.side_b.write(_build_hex_header(ZRINIT, 0x23, 0, 0, 0))
-            await _read_bin32_frame(piped.side_b)  # ZFILE
+            await _read_hex_frame(piped.side_b)  # ZFILE
             await _read_subpacket(piped.side_b)
             await piped.side_b.write(_build_hex_header(ZRPOS, 0, 0, 0, 0))
-            await _read_bin32_frame(piped.side_b)  # ZDATA
+            await _read_hex_frame(piped.side_b)  # ZDATA
             while True:
                 _, term = await _read_subpacket_with_term(piped.side_b)
                 if term == ZCRCE:
@@ -500,12 +499,12 @@ class TestZModemSenderPaths:
         async def receiver():
             await _read_hex_frame(piped.side_b)
             await piped.side_b.write(_build_hex_header(ZRINIT, 0x23, 0, 0, 0))
-            await _read_bin32_frame(piped.side_b)  # ZFILE
+            await _read_hex_frame(piped.side_b)  # ZFILE
             await _read_subpacket(piped.side_b)
             # buffered extra ZRINIT — should be drained before ZRPOS
             await piped.side_b.write(_build_hex_header(ZRINIT, 0x23, 0, 0, 0))
             await piped.side_b.write(_build_hex_header(ZRPOS, 0, 0, 0, 0))  # correct
-            await _read_bin32_frame(piped.side_b)
+            await _read_hex_frame(piped.side_b)
             while True:
                 _, term = await _read_subpacket_with_term(piped.side_b)
                 if term == ZCRCE:
@@ -529,7 +528,7 @@ class TestZModemSenderPaths:
         async def receiver():
             await _read_hex_frame(piped.side_b)
             await piped.side_b.write(_build_hex_header(ZRINIT, 0x23, 0, 0, 0))
-            await _read_bin32_frame(piped.side_b)  # ZFILE
+            await _read_hex_frame(piped.side_b)  # ZFILE
             await _read_subpacket(piped.side_b)
             for _ in range(3):  # more than retry_limit
                 await piped.side_b.write(_build_hex_header(ZACK, 0, 0, 0, 0))
@@ -548,10 +547,10 @@ class TestZModemSenderPaths:
         async def receiver():
             await _read_hex_frame(piped.side_b)
             await piped.side_b.write(_build_hex_header(ZRINIT, 0x23, 0, 0, 0))
-            await _read_bin32_frame(piped.side_b)  # ZFILE
+            await _read_hex_frame(piped.side_b)  # ZFILE
             await _read_subpacket(piped.side_b)
             await piped.side_b.write(_build_hex_header(ZRPOS, 0, 0, 0, 0))
-            await _read_bin32_frame(piped.side_b)
+            await _read_hex_frame(piped.side_b)
             while True:
                 _, term = await _read_subpacket_with_term(piped.side_b)
                 if term == ZCRCE:
@@ -576,10 +575,10 @@ class TestZModemSenderPaths:
         async def receiver():
             await _read_hex_frame(piped.side_b)
             await piped.side_b.write(_build_hex_header(ZRINIT, 0x23, 0, 0, 0))
-            await _read_bin32_frame(piped.side_b)  # ZFILE
+            await _read_hex_frame(piped.side_b)  # ZFILE
             await _read_subpacket(piped.side_b)
             await piped.side_b.write(_build_hex_header(ZRPOS, 0, 0, 0, 0))
-            await _read_bin32_frame(piped.side_b)
+            await _read_hex_frame(piped.side_b)
             while True:
                 _, term = await _read_subpacket_with_term(piped.side_b)
                 if term == ZCRCE:
@@ -604,10 +603,10 @@ class TestZModemSenderPaths:
         async def receiver():
             await _read_hex_frame(piped.side_b)
             await piped.side_b.write(_build_hex_header(ZRINIT, 0x23, 0, 0, 0))
-            await _read_bin32_frame(piped.side_b)  # ZFILE
+            await _read_hex_frame(piped.side_b)  # ZFILE
             await _read_subpacket(piped.side_b)
             await piped.side_b.write(_build_hex_header(ZRPOS, 0, 0, 0, 0))
-            await _read_bin32_frame(piped.side_b)
+            await _read_hex_frame(piped.side_b)
             while True:
                 _, term = await _read_subpacket_with_term(piped.side_b)
                 if term == ZCRCE:

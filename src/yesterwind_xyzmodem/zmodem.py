@@ -85,7 +85,7 @@ ZCRCE = ord("h")  # 0x68 — end of file
 ZCRCQ = ord("i")  # 0x69 — end subpacket, request ZACK
 
 # Bytes that must be escaped with ZDLE
-_MUST_ESCAPE = {0x11, 0x13, 0x91, 0x93, ZDLE}
+_MUST_ESCAPE = {0x11, 0x13, 0x91, 0x93, ZDLE, 0xFF}
 
 # Subpacket size for streaming
 _SUBPACKET_SIZE = 1024
@@ -325,7 +325,7 @@ class ZModem:
         ).encode("ascii")
 
         async def _send_zfile() -> None:
-            await self._transport.write(_build_bin32_header(ZFILE, 0, 0, 0, 0))
+            await self._transport.write(_build_hex_header(ZFILE, 0, 0, 0, 0))
             await self._write_data_subpacket(info_bytes, ZCRCW)
 
         await _send_zfile()
@@ -359,7 +359,7 @@ class ZModem:
 
         # ZDATA header with starting offset
         f0, f1, f2, f3 = _encode_offset(offset)
-        await self._transport.write(_build_bin32_header(ZDATA, f0, f1, f2, f3))
+        await self._transport.write(_build_hex_header(ZDATA, f0, f1, f2, f3))
 
         bytes_sent = offset
         while True:
